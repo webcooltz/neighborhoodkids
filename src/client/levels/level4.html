@@ -142,8 +142,8 @@ canvas#c { display:block; width:100vw; height:100vh; }
 <div id="instr">Walk: WASD · Right-drag = orbit camera · Approach board → E to hop on<br>Riding: A/← dodge left · D/→ dodge right · Space = jump · Steer in air = trick<br>3 bails = game over</div>
 
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-<script src="mobile.js"></script>
-<script src="achievements.js"></script>
+<script src="../js/mobile.js"></script>
+<script src="../js/achievements.js"></script>
 <script>
 'use strict';
 
@@ -896,10 +896,10 @@ document.getElementById('next-btn').addEventListener('click',()=>{
     resetLevel();
     startLevel();
   }else{
-    window.location.href='index.html';
+    window.location.href='../index.html';
   }
 });
-document.getElementById('fail-menu-btn').addEventListener('click',()=>window.location.href='index.html');
+document.getElementById('fail-menu-btn').addEventListener('click',()=>window.location.href='../index.html');
 
 // ── GAME LOOP ─────────────────────────────────────────────────────────────────
 let prev=performance.now();

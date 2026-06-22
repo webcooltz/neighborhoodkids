@@ -17,7 +17,8 @@ const PORT = process.env.PORT || 8787;
 
 // HTTP server: handles the editor's "Save layout" POST + CORS preflight.
 // (WebSocket server is attached to it below.)
-const ALLOWED_LAYOUTS = { lobby: 'lobby_layout.js' };  // whitelist of saveable levels
+// Paths are relative to this file (src/server/); the client lives in src/client/.
+const ALLOWED_LAYOUTS = { lobby: '../client/js/lobby_layout.js' };  // whitelist of saveable levels
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
