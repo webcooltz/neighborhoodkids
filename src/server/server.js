@@ -25,6 +25,13 @@ const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
+  // Health check: GET / reports that the server is up + current player count.
+  if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end(liveCount() + ' players connected');
+    return;
+  }
+
   if (req.method === 'POST' && req.url === '/save-layout') {
     let body = '';
     req.on('data', (c) => { body += c; if (body.length > 2e6) req.destroy(); });
