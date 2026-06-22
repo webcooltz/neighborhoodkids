@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neighborhood Kids</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  min-height:100vh;
+  background: linear-gradient(160deg, #0d1b3e 0%, #1a2a5e 40%, #0d3b2e 100%);
+  font-family: 'Arial Rounded MT Bold', Arial, sans-serif;
+  overflow-x: hidden;
+  color: #fff;
+}
+
+/* ── Stars background ── */
+body::before {
+  content:'';
+  position:fixed; inset:0; pointer-events:none;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 25% 55%, rgba(255,255,255,.5) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 40% 10%, rgba(255,255,255,.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 75%, rgba(255,255,255,.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 75% 35%, rgba(255,255,255,.6) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 85% 15%, rgba(255,255,255,.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 90% 60%, rgba(255,255,255,.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 15% 80%, rgba(255,255,255,.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 50% 42%, rgba(255,255,255,.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 90%, rgba(255,255,255,.4) 0%, transparent 100%);
+}
+
+/* ── Header ── */
+header {
+  text-align:center;
+  padding: 52px 20px 28px;
+}
+.title {
+  font-size: clamp(36px, 7vw, 72px);
+  font-weight: 900;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #ffe066 0%, #ffb300 50%, #ff8f00 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(0 2px 12px rgba(255,180,0,.45));
+  line-height: 1.1;
+}
+.subtitle {
+  margin-top: 10px;
+  color: rgba(255,255,255,.55);
+  font-size: 14px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+/* ── Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 10px 28px 60px;
+}
+@media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) { .grid { grid-template-columns: 1fr; } }
+
+/* ── Card ── */
+.card {
+  border-radius: 18px;
+  border: 1.5px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform .18s, box-shadow .18s;
+  position: relative;
+}
+.card.playable {
+  cursor: pointer;
+}
+.card.playable:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 12px 40px rgba(0,0,0,.5), 0 0 0 1.5px var(--accent);
+}
+.card.locked {
+  opacity: .48;
+  filter: grayscale(.6);
+}
+
+.card-header {
+  height: 9px;
+  background: var(--accent);
+}
+
+.card-body {
+  padding: 18px 16px 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lvl-num {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.emoji {
+  font-size: 40px;
+  line-height: 1;
+  margin: 4px 0;
+}
+
+.kid-name {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+
+.kid-info {
+  font-size: 12px;
+  color: rgba(255,255,255,.5);
+  letter-spacing: 1px;
+}
+
+.card-stars {
+  font-size: 18px;
+  color: #ffd54f;
+  letter-spacing: 3px;
+  min-height: 22px;
+  margin-top: 2px;
+}
+
+.card-btn {
+  margin-top: 14px;
+  padding: 10px 0;
+  border: none;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: filter .15s, transform .1s;
+  width: 100%;
+}
+.card-btn.play {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(0,0,0,.4);
+}
+.card-btn.play:hover  { filter: brightness(1.2); transform: scale(1.03); }
+.card-btn.soon {
+  background: rgba(255,255,255,.1);
+  color: rgba(255,255,255,.35);
+  cursor: default;
+}
+
+/* ── Built badge ── */
+.built-badge {
+  position:absolute; top:14px; right:12px;
+  background: rgba(76,175,80,.9);
+  color:#fff; font-size:9px; font-weight:bold;
+  letter-spacing:1px; padding:3px 8px; border-radius:20px;
+  text-transform:uppercase;
+}
+/* ── Achievements ── */
+#ach-btn{ margin-top:14px; background:rgba(255,255,255,.1); color:#fff; cursor:pointer;
+  border:1px solid rgba(255,255,255,.28); border-radius:22px; padding:9px 20px;
+  font-size:15px; font-weight:bold; letter-spacing:1px; }
+#ach-btn:hover{ background:rgba(255,255,255,.2); }
+#ach-modal{ position:fixed; inset:0; z-index:200; display:none;
+  align-items:center; justify-content:center; background:rgba(5,10,25,.78); padding:20px; }
+#ach-modal .panel{ background:linear-gradient(160deg,#16233f,#0e1830); color:#fff;
+  border:1px solid rgba(255,255,255,.14); border-radius:18px; padding:24px 26px;
+  max-width:520px; width:100%; max-height:84vh; overflow-y:auto; box-shadow:0 12px 40px rgba(0,0,0,.5); }
+#ach-modal h2{ font-size:24px; letter-spacing:2px; text-align:center; margin-bottom:4px; }
+#ach-modal .prog{ text-align:center; color:#a5d6a7; font-size:14px; margin-bottom:16px; }
+.ach{ display:flex; align-items:center; gap:14px; padding:12px 14px; margin-bottom:10px;
+  border-radius:12px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); }
+.ach.got{ background:rgba(76,175,80,.16); border-color:rgba(76,175,80,.5); }
+.ach .ic{ font-size:30px; width:40px; text-align:center; filter:grayscale(1) opacity(.5); }
+.ach.got .ic{ filter:none; }
+.ach .tx .nm{ font-weight:bold; font-size:16px; }
+.ach .tx .ds{ font-size:13px; color:rgba(255,255,255,.6); }
+.ach .badge{ margin-left:auto; font-size:13px; font-weight:bold;
+  color:rgba(255,255,255,.4); letter-spacing:1px; }
+.ach.got .badge{ color:#81c784; }
+#ach-close{ display:block; margin:8px auto 0; padding:11px 26px; border:none; border-radius:22px;
+  background:rgba(255,255,255,.12); color:#fff; font-size:15px; font-weight:bold; cursor:pointer; }
+#ach-reset{ display:block; margin:14px auto 0; padding:8px 18px; border-radius:20px;
+  border:1px solid rgba(255,138,128,.5); background:rgba(229,57,53,.15); color:#ff8a80;
+  font-size:13px; font-weight:bold; cursor:pointer; }
+#ach-reset:hover{ background:rgba(229,57,53,.3); }
+#stars-reset{ display:block; margin:8px auto 0; padding:8px 18px; border-radius:20px;
+  border:1px solid rgba(255,138,128,.5); background:rgba(229,57,53,.15); color:#ff8a80;
+  font-size:13px; font-weight:bold; cursor:pointer; }
+#stars-reset:hover{ background:rgba(229,57,53,.3); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">Neighborhood Kids</div>
+  <div class="subtitle">Choose your kid &amp; play</div>
+  <button id="ach-btn">🏆 Achievements</button>
+</header>
+
+<div class="grid">
+
+  <!-- Lobby: multiplayer town -->
+  <div class="card playable" style="--accent:#26a69a" onclick="window.location.href='lobby.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Multiplayer</div>
+      <div class="emoji">🏘️</div>
+      <div class="kid-name">LOBBY</div>
+      <div class="kid-info">Town &amp; Park</div>
+      <div class="card-stars" id="lobby-count" style="font-size:13px;color:#a5d6a7;letter-spacing:1px"></div>
+      <button class="card-btn play">Enter</button>
+    </div>
+  </div>
+
+  <!-- Level 1: Brooklynn -->
+  <div class="card playable" style="--accent:#e91e63" onclick="window.location.href='level5.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 01</div>
+      <div class="emoji">🎨</div>
+      <div class="kid-name">BROOKLYNN</div>
+      <div class="kid-info">Drawing</div>
+      <div class="card-stars" id="stars-5"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+  <!-- Level 2: Mackayla -->
+  <div class="card playable" style="--accent:#ab47bc" onclick="window.location.href='level6.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 02</div>
+      <div class="emoji">🥋</div>
+      <div class="kid-name">MACKAYLA</div>
+      <div class="kid-info">Karate</div>
+      <div class="card-stars" id="stars-6"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+  <!-- Level 3: Marshall -->
+  <div class="card playable" style="--accent:#7b1fa2" onclick="window.location.href='level3.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 03</div>
+      <div class="emoji">🎻</div>
+      <div class="kid-name">MARSHALL</div>
+      <div class="kid-info">Violin Hero</div>
+      <div class="card-stars" id="stars-3"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+  <!-- Level 4: Wyatt -->
+  <div class="card playable" style="--accent:#1565c0" onclick="window.location.href='level7.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 04</div>
+      <div class="emoji">🎣</div>
+      <div class="kid-name">WYATT</div>
+      <div class="kid-info">Fishing</div>
+      <div class="card-stars" id="stars-7"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+  <!-- Level 5: Brady -->
+  <div class="card playable" style="--accent:#f57c00" onclick="window.location.href='level4.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 05</div>
+      <div class="emoji">🛹</div>
+      <div class="kid-name">BRADY</div>
+      <div class="kid-info">Skateboarding</div>
+      <div class="card-stars" id="stars-4"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+  <!-- Level 6: TJ -->
+  <div class="card playable" style="--accent:#cc1111" onclick="window.location.href='level2.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 06</div>
+      <div class="emoji">🕷️</div>
+      <div class="kid-name">TJ</div>
+      <div class="kid-info">Spiderman</div>
+      <div class="card-stars" id="stars-2"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+  <!-- Level 7: Dawson -->
+  <div class="card playable" style="--accent:#4caf50" onclick="window.location.href='level1.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 07</div>
+      <div class="emoji">⚽</div>
+      <div class="kid-name">DAWSON</div>
+      <div class="kid-info">Soccer</div>
+      <div class="card-stars" id="stars-1"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+  <!-- Level 8: Sawyer -->
+  <div class="card playable" style="--accent:#9c27b0" onclick="window.location.href='level8.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 08</div>
+      <div class="emoji">🦄</div>
+      <div class="kid-name">SAWYER</div>
+      <div class="kid-info">Unicorn Flight</div>
+      <div class="card-stars" id="stars-8"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+  <!-- Hidden bonus: Tyler -->
+  <div class="card playable" id="tyler-card" style="--accent:#ffd54f; display:none"
+       onclick="window.location.href='tyler.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level ??</div>
+      <div class="emoji">🧟</div>
+      <div class="kid-name">TYLER</div>
+      <div class="kid-info">Last Stand</div>
+      <div class="card-stars" id="stars-9"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Invisible reveal button beneath the modules -->
+<button id="secret-btn" aria-label=""
+  style="display:block;width:100%;max-width:1100px;height:48px;margin:0 auto 40px;
+         background:transparent;border:none;cursor:default;"></button>
+
+<!-- Achievements modal -->
+<div id="ach-modal">
+  <div class="panel">
+    <h2>🏆 Achievements</h2>
+    <div class="prog" id="ach-prog"></div>
+    <div id="ach-list"></div>
+    <button id="ach-reset" title="For testing: clears unlocks so they can re-trigger">↺ Reset achievements</button>
+    <button id="stars-reset" title="For testing: clears all level stars/progress">↺ Reset stars</button>
+    <button id="ach-close">Close</button>
+  </div>
+</div>
+
+<script src="achievements.js"></script>
+<script>
+(function(){
+  [1,2,3,4,5,6,7,8,9].forEach(function(n){
+    var s=parseInt(localStorage.getItem('tuck_stars_'+n)||'0');
+    var el=document.getElementById('stars-'+n);
+    if(!el||s<1) return;
+    el.innerHTML='★'.repeat(s)+'<span style="opacity:.22">★</span>'.repeat(3-s);
+  });
+
+  // ── Achievements (definitions live in achievements.js → window.Ach) ─────────
+  var ACHS=(window.Ach&&window.Ach.LIST)||[];
+  function renderAch(){
+    var list=document.getElementById('ach-list'); if(!list) return;
+    var got=0; list.innerHTML='';
+    ACHS.forEach(function(a){
+      var unlocked=false; try{ unlocked=a.got(); }catch(e){}
+      if(unlocked) got++;
+      var row=document.createElement('div'); row.className='ach'+(unlocked?' got':'');
+      row.innerHTML='<div class="ic">'+a.ic+'</div>'+
+        '<div class="tx"><div class="nm">'+a.nm+'</div><div class="ds">'+a.ds+'</div></div>'+
+        '<div class="badge">'+(unlocked?'UNLOCKED':'LOCKED')+'</div>';
+      list.appendChild(row);
+    });
+    document.getElementById('ach-prog').textContent=got+' / '+ACHS.length+' unlocked';
+  }
+  function updateBadge(){
+    var c=(window.Ach&&window.Ach.count())||{got:0,total:0};
+    var btn=document.getElementById('ach-btn');
+    if(btn) btn.innerHTML='🏆 Achievements <b>'+c.got+'/'+c.total+'</b>';
+  }
+  updateBadge();
+  var am=document.getElementById('ach-modal');
+  document.getElementById('ach-btn').addEventListener('click',function(){ renderAch(); am.style.display='flex'; });
+  document.getElementById('ach-close').addEventListener('click',function(){ am.style.display='none'; });
+  am.addEventListener('click',function(e){ if(e.target===am) am.style.display='none'; });
+  document.getElementById('ach-reset').addEventListener('click',function(){
+    if(!confirm('Reset achievement unlocks? (Level stars are kept.)\nEarned ones will pop again as you re-trigger them.')) return;
+    ['tuck_lobby_friend','tuck_skatepark','tuck_tyler_beat'].forEach(function(k){ localStorage.removeItem(k); });
+    localStorage.setItem('tuck_ach_seen','');   // empty = re-toast on next earn
+    renderAch(); updateBadge();
+  });
+  document.getElementById('stars-reset').addEventListener('click',function(){
+    if(!confirm('Reset ALL level stars and progress? This cannot be undone.')) return;
+    [1,2,3,4,5,6,7,8].forEach(function(n){ localStorage.removeItem('tuck_stars_'+n); });
+    localStorage.setItem('tuck_ach_seen','');
+    location.reload();
+  });
+
+  // Hidden Tyler level stays invisible & unclickable until the secret button is pressed
+  var tyler=document.getElementById('tyler-card');
+  function reveal(){ if(tyler) tyler.style.display='flex'; }
+  var sb=document.getElementById('secret-btn');
+  if(sb) sb.addEventListener('click',reveal);
+  // auto-reveal once all 8 levels are beaten (no secret button needed)
+  if([1,2,3,4,5,6,7,8].every(function(n){ return parseInt(localStorage.getItem('tuck_stars_'+n)||'0')>=1; })) reveal();
+
+  // Live "players online" badge on the LOBBY card.
+  // Keep this in sync with SERVER_URL in lobby.html ('' = local dev ws://localhost:8787).
+  var SERVER_URL='';
+  var url=SERVER_URL||'ws://localhost:8787';
+  var badge=document.getElementById('lobby-count');
+  if(badge){
+    try{
+      var ws=new WebSocket(url);
+      ws.onmessage=function(ev){
+        var m; try{ m=JSON.parse(ev.data);}catch(e){return;}
+        if(m.t==='count') badge.textContent='🟢 '+m.n+' online';
+      };
+      ws.onerror=function(){ badge.textContent=''; };
+      ws.onclose=function(){};
+    }catch(e){ badge.textContent=''; }
+  }
+})();
+</script>
+
+</body>
+</html>

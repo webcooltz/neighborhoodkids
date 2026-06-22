@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backyard Pond – Wyatt</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',Arial,sans-serif; }
+#c { display:block; width:100vw; height:100vh; }
+
+#intro {
+  position:fixed; inset:0; background:rgba(5,15,30,.92);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; z-index:100;
+}
+.lvl-tag  { color:#90caf9; font-size:13px; letter-spacing:4px; text-transform:uppercase; }
+.lvl-name { color:#fff; font-size:72px; font-weight:900; letter-spacing:6px; line-height:1;
+            text-shadow:0 4px 20px rgba(30,100,200,.6); }
+.lvl-desc { color:rgba(255,255,255,.75); font-size:15px; text-align:center; line-height:1.7; max-width:380px; }
+#intro-btn {
+  margin-top:12px; padding:14px 48px; font-size:18px; font-weight:bold;
+  background:#1565c0; color:#fff; border:none; border-radius:30px;
+  cursor:pointer; letter-spacing:2px; text-transform:uppercase;
+  box-shadow:0 4px 16px rgba(21,101,192,.55); transition:transform .1s;
+}
+#intro-btn:hover { transform:scale(1.05); }
+
+#approach-hint {
+  position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,.75); color:#90caf9; padding:10px 26px; border-radius:24px;
+  font-size:15px; letter-spacing:2px; border:2px solid #1565c0;
+  display:none; z-index:60; pointer-events:none; white-space:nowrap;
+}
+#approach-hint b { color:#fff; }
+
+#cast-hint {
+  position:fixed; bottom:118px; left:50%; transform:translateX(-50%);
+  color:rgba(255,255,255,.85); font-size:14px; text-shadow:1px 1px 3px #000;
+  display:none; text-align:center; pointer-events:none;
+}
+
+#hud {
+  position:fixed; top:14px; right:16px;
+  display:none; flex-direction:column; gap:6px; align-items:flex-end;
+}
+.badge { background:rgba(0,0,0,.45); color:#fff; padding:5px 14px;
+         border-radius:20px; font-size:13px; font-weight:bold;
+         text-shadow:1px 1px 2px #000; border:1px solid rgba(255,255,255,.2); }
+
+#fish-hud {
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  display:none; align-items:center; gap:10px;
+  background:rgba(0,0,0,.4); padding:8px 18px; border-radius:24px;
+  border:1px solid rgba(255,255,255,.2);
+}
+.fish-pip { font-size:22px; opacity:.22; transition:all .3s; }
+.fish-pip.caught { opacity:1; filter:drop-shadow(0 0 6px #4fc3f7); }
+
+#bite-flash {
+  position:fixed; top:36%; left:50%; transform:translate(-50%,-50%);
+  font-size:46px; font-weight:900; letter-spacing:4px; pointer-events:none;
+  z-index:70; opacity:0; transition:opacity .12s;
+  text-shadow:0 3px 16px rgba(0,0,0,.7);
+}
+
+#win {
+  position:fixed; inset:0; background:rgba(5,15,30,.92);
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; z-index:100;
+}
+.win-emoji { font-size:72px; }
+.win-title { color:#90caf9; font-size:52px; font-weight:900; letter-spacing:4px; }
+.win-stat  { color:rgba(255,255,255,.8); font-size:16px; }
+.win-btns  { display:flex; gap:12px; margin-top:12px; }
+.win-btn { padding:12px 32px; font-size:15px; font-weight:bold; border:none;
+           border-radius:24px; cursor:pointer; letter-spacing:1px; }
+.win-btn.primary   { background:#1565c0; color:#fff; }
+.win-btn.secondary { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.3); }
+
+#instr { position:fixed; bottom:14px; left:14px;
+         color:rgba(255,255,255,.65); font-size:12px; line-height:1.75; text-shadow:1px 1px 2px #000; }
+
+#slider-wrap {
+  position:fixed; bottom:68px; left:50%; transform:translateX(-50%);
+  display:none; flex-direction:column; align-items:center; gap:7px; z-index:80;
+}
+#slider-label { color:#fff; font-size:13px; font-weight:bold; letter-spacing:3px;
+                text-shadow:1px 1px 4px #000; text-transform:uppercase; }
+#slider-bar {
+  width:340px; height:34px; border-radius:17px; overflow:hidden; position:relative;
+  border:2px solid rgba(255,255,255,.55); box-shadow:0 0 24px rgba(0,0,0,.6);
+  background:linear-gradient(to right,
+    #e53935 0%,#e53935 20%,
+    #fb8c00 20%,#fb8c00 35%,
+    #43a047 35%,#43a047 65%,
+    #fb8c00 65%,#fb8c00 80%,
+    #e53935 80%,#e53935 100%);
+}
+#slider-needle {
+  position:absolute; top:0; width:5px; height:100%;
+  background:#fff; border-radius:3px; left:50%;
+  transform:translateX(-50%);
+  box-shadow:0 0 10px #fff,0 0 4px rgba(0,0,0,.4);
+  pointer-events:none;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="intro">
+  <div class="lvl-tag">Level 07</div>
+  <div class="lvl-name">WYATT</div>
+  <div class="lvl-desc">Wyatt loves fishing at the pond out back!<br>Walk to the dock, press <b>E</b> to cast.<br>Stop the slider in the <b style="color:#43a047">green zone</b> with <b>Space</b> — 5 ponds, each trickier!</div>
+  <button id="intro-btn">LET'S FISH!</button>
+</div>
+
+<div id="approach-hint">Press <b>E</b> to cast line</div>
+<div id="cast-hint">Watch the bobber… wait for it to dip!</div>
+
+<div id="slider-wrap">
+  <div id="slider-label">🐟 BITE! Press Space!</div>
+  <div id="slider-bar"><div id="slider-needle"></div></div>
+</div>
+
+<div id="hud">
+  <div class="badge" id="misses-badge">Misses: 0</div>
+</div>
+
+<div id="fish-hud">
+  <div class="fish-pip" id="fp0">🐟</div>
+  <div class="fish-pip" id="fp1">🐠</div>
+  <div class="fish-pip" id="fp2">🐡</div>
+  <div class="fish-pip" id="fp3">🎣</div>
+  <div class="fish-pip" id="fp4">🐟</div>
+</div>
+
+<div id="bite-flash"></div>
+
+<div id="win">
+  <div class="win-emoji">🎣</div>
+  <div class="win-title">NICE CATCH!</div>
+  <div class="win-stat" id="win-fish"></div>
+  <div class="win-stat" id="win-misses"></div>
+  <div id="win-stars-earned" style="font-size:38px;color:#ffd54f;letter-spacing:8px;margin:6px 0"></div>
+  <div class="win-btns">
+    <button class="win-btn primary" id="replay-btn">Fish Again</button>
+    <button class="win-btn secondary" id="next-btn">Next Level →</button>
+    <button class="win-btn secondary" onclick="window.location.href='index.html'">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="instr">WASD – Move &nbsp;|&nbsp; Right-drag – Camera &nbsp;|&nbsp; Shift – Sprint<br>Near dock: E to cast &nbsp;|&nbsp; Stop slider in green zone with Space!</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="mobile.js"></script>
+<script src="achievements.js"></script>
+<script>
+'use strict';
+
+// ─── AUDIO ────────────────────────────────────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function synth(freq,type,vol,dur,freqEnd){
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type; o.frequency.value=freq;
+  const t=audioCtx.currentTime;
+  if(freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd,t+dur*.8);
+  o.connect(g); g.connect(audioCtx.destination);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.start(t); o.stop(t+dur+.01);
+}
+function noise(vol,dur,freq,q){
+  const buf=audioCtx.createBuffer(1,Math.ceil(audioCtx.sampleRate*dur),audioCtx.sampleRate);
+  const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const src=audioCtx.createBufferSource(),g=audioCtx.createGain();
+  const f=audioCtx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq||400; f.Q.value=q||1;
+  src.buffer=buf; src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime;
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  src.start(t); src.stop(t+dur+.01);
+}
+function snd_cast()  { noise(.12,.14,320,2); synth(180,'sine',.06,.18,100); }
+function snd_splash(){ noise(.28,.18,600,1.5); synth(160,'sine',.08,.12); }
+function snd_bite()  { synth(500,'sine',.2,.07); synth(700,'sine',.15,.07); }
+function snd_catch() { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>synth(f,'triangle',.13,.4),i*80)); }
+function snd_miss()  { synth(280,'sawtooth',.12,.14,150); }
+function snd_win()   { [523,659,784,880,1047,1319].forEach((f,i)=>setTimeout(()=>synth(f,'sine',.12,.5),i*100)); }
+
+let birdsOn=false;
+function startBirds(){
+  if(birdsOn)return; birdsOn=true;
+  const chirp=()=>{
+    const now=audioCtx.currentTime,freq=700+Math.random()*500;
+    for(let i=0;i<1+Math.floor(Math.random()*3);i++){
+      const t=now+i*.14,o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination); o.type='sine';
+      o.frequency.setValueAtTime(freq+i*80,t);
+      o.frequency.linearRampToValueAtTime(freq+i*80+180,t+.06);
+      o.frequency.linearRampToValueAtTime(freq+i*80,t+.12);
+      g.gain.setValueAtTime(.055,t); g.gain.exponentialRampToValueAtTime(.001,t+.14);
+      o.start(t); o.stop(t+.15);
+    }
+    setTimeout(chirp,2200+Math.random()*4000);
+  };
+  setTimeout(chirp,800);
+}
+
+// ─── SCENE ────────────────────────────────────────────────────────────────────
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87ceeb);
+scene.fog=new THREE.FogExp2(0xaedaff,.016);
+
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,200);
+camera.position.set(0,5,12);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+scene.add(new THREE.AmbientLight(0xfff0dd,.55));
+const sun=new THREE.DirectionalLight(0xfff8e1,1.2);
+sun.position.set(10,22,12); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-22; sun.shadow.camera.right=22;
+sun.shadow.camera.top=22; sun.shadow.camera.bottom=-22;
+sun.shadow.camera.far=80; sun.shadow.bias=-.001;
+scene.add(sun);
+const fill=new THREE.DirectionalLight(0xaaccff,.3);
+fill.position.set(-8,5,8); scene.add(fill);
+
+// ─── WORLD ────────────────────────────────────────────────────────────────────
+function Mesh(geo,col,shadow){
+  const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+  if(shadow!==false){m.castShadow=true;m.receiveShadow=true;}
+  return m;
+}
+
+const clouds=[];
+
+(function buildWorld(){
+  // Ground
+  const ground=Mesh(new THREE.PlaneGeometry(60,60),0x5cb85c,false);
+  ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+
+  // Pond (dark water disc)
+  const pond=new THREE.Mesh(new THREE.CircleGeometry(6.5,32),
+    new THREE.MeshLambertMaterial({color:0x1a6b8a}));
+  pond.rotation.x=-Math.PI/2; pond.position.set(0,-.01,-10);
+  pond.receiveShadow=true; scene.add(pond);
+
+  // Pond shimmer overlay
+  const shim=new THREE.Mesh(new THREE.CircleGeometry(3.2,16),
+    new THREE.MeshLambertMaterial({color:0x4dd0e1,transparent:true,opacity:.3}));
+  shim.rotation.x=-Math.PI/2; shim.position.set(1.5,.006,-9); scene.add(shim);
+
+  // Muddy bank ring
+  const bank=new THREE.Mesh(new THREE.RingGeometry(6.3,7.4,32),
+    new THREE.MeshLambertMaterial({color:0x5d4037,side:THREE.DoubleSide}));
+  bank.rotation.x=-Math.PI/2; bank.position.set(0,.005,-10); scene.add(bank);
+
+  // Dock planks z=-1.2 to z=-8.4
+  const woodMat=new THREE.MeshLambertMaterial({color:0x8d6e63});
+  const dkMat =new THREE.MeshLambertMaterial({color:0x6d4c41});
+  for(let z=-1.2;z>=-8.5;z-=0.72){
+    const plank=new THREE.Mesh(new THREE.BoxGeometry(2,.1,.6),woodMat);
+    plank.position.set(0,.09,z); plank.castShadow=true; plank.receiveShadow=true; scene.add(plank);
+  }
+  // Dock posts
+  [[-1.5],[-3.6],[-5.7],[-7.8]].forEach(([z])=>{
+    [-0.88,0.88].forEach(x=>{
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(.07,.09,1.4,6),dkMat);
+      post.position.set(x,-.58,z); post.castShadow=true; scene.add(post);
+    });
+  });
+  // Side rails along dock
+  [-0.92,0.92].forEach(x=>{
+    const rail=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,7.5,5),dkMat);
+    rail.rotation.z=Math.PI/2; rail.position.set(0,.45,-5); scene.add(rail);
+  });
+
+  // Bucket on dock end
+  const bkt=Mesh(new THREE.CylinderGeometry(.18,.15,.3,8),0x1565c0);
+  bkt.position.set(.72,.26,-8); scene.add(bkt);
+  const bktL=Mesh(new THREE.CylinderGeometry(.19,.19,.04,8),0x0d47a1);
+  bktL.position.set(.72,.32,-8); scene.add(bktL);
+  // Tackle box
+  const box=Mesh(new THREE.BoxGeometry(.42,.22,.28),0x37474f);
+  box.position.set(-.68,.2,-7.5); scene.add(box);
+
+  // Trees around pond
+  const trunkMat=new THREE.MeshLambertMaterial({color:0x6d4c41});
+  const lMats=[
+    new THREE.MeshLambertMaterial({color:0x43a047}),
+    new THREE.MeshLambertMaterial({color:0x2e7d32}),
+    new THREE.MeshLambertMaterial({color:0x388e3c}),
+  ];
+  [
+    [5.5,0,-7.5],[-6,0,-8],[ 7,0,-12],[-7.5,0,-11.5],
+    [3.5,0,-16],[-3,0,-15.5],[ 8,0,-6],[-8.5,0,-7],[0.5,0,-17]
+  ].forEach(([x,y,z],i)=>{
+    const g=new THREE.Group();
+    const r=1.1+(i%3)*.3;
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.17,.25,2.2+i*.06,7),trunkMat);
+    trunk.position.y=1.1; trunk.castShadow=true; g.add(trunk);
+    const leaves=new THREE.Mesh(new THREE.SphereGeometry(r,6,5),lMats[i%3]);
+    leaves.position.y=2.9+r*.2; leaves.castShadow=true; g.add(leaves);
+    g.position.set(x,y,z); scene.add(g);
+  });
+
+  // Lily pads on pond
+  [[-.5,-.008,-11],[1.8,-.008,-10.5],[-2,-.008,-9.5]].forEach(([x,y,z])=>{
+    const pad=new THREE.Mesh(new THREE.CircleGeometry(.55,12),
+      new THREE.MeshLambertMaterial({color:0x388e3c}));
+    pad.rotation.x=-Math.PI/2; pad.position.set(x,y,z); scene.add(pad);
+    const flower=new THREE.Mesh(new THREE.CircleGeometry(.18,8),
+      new THREE.MeshLambertMaterial({color:0xf8bbd0}));
+    flower.rotation.x=-Math.PI/2; flower.position.set(x,y+.005,z); scene.add(flower);
+  });
+
+  // House in background
+  const hg=new THREE.Group();
+  hg.add(Mesh(new THREE.BoxGeometry(7,4.2,5),0xe53935));
+  hg.children[0].position.y=2.1; hg.children[0].castShadow=true;
+  const rm=Mesh(new THREE.ConeGeometry(5.2,2.8,4),0x5d1a1a);
+  rm.position.y=5.6; rm.rotation.y=Math.PI/4; hg.add(rm);
+  hg.position.set(-9,0,-14); scene.add(hg);
+
+  // Fence perimeter
+  const postMat=new THREE.MeshLambertMaterial({color:0x9e9e9e});
+  const wireMat=new THREE.MeshLambertMaterial({color:0x9e9e9e,transparent:true,opacity:.38,side:THREE.DoubleSide});
+  const FY=14,PH=1.5,PS=2;
+  [{ax:'z',fixed:-FY},{ax:'z',fixed:FY},{ax:'x',fixed:-FY},{ax:'x',fixed:FY}].forEach(({ax,fixed})=>{
+    for(let t=-FY;t<=FY;t+=PS){
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,PH,6),postMat);
+      post.position.set(ax==='z'?t:fixed,PH/2,ax==='x'?t:fixed);
+      scene.add(post);
+    }
+    const wg=ax==='z'?new THREE.PlaneGeometry(FY*2,PH):new THREE.PlaneGeometry(PH,FY*2);
+    const wm=new THREE.Mesh(wg,wireMat);
+    wm.position.set(ax==='x'?fixed:0,PH/2,ax==='z'?fixed:0);
+    if(ax==='x')wm.rotation.y=Math.PI/2; scene.add(wm);
+  });
+
+  // Clouds
+  const cMat=new THREE.MeshLambertMaterial({color:0xffffff});
+  for(let i=0;i<7;i++){
+    const cg=new THREE.Group();
+    const n=3+Math.floor(Math.random()*3);
+    for(let j=0;j<n;j++){
+      const r=.7+Math.random()*.9;
+      const p=new THREE.Mesh(new THREE.SphereGeometry(r,5,4),cMat);
+      p.position.set((j-n/2)*1.3+(Math.random()-.5)*.5,(Math.random()-.5)*.35,(Math.random()-.5)*.5);
+      cg.add(p);
+    }
+    cg.position.set((Math.random()-.5)*50,18+Math.random()*6,(Math.random()-.5)*50);
+    cg.userData.spd=(Math.random()>.5?1:-1)*(.3+Math.random()*.6);
+    scene.add(cg); clouds.push(cg);
+  }
+})();
+
+// ─── WYATT CHARACTER ──────────────────────────────────────────────────────────
+class WyattPlayer {
+  constructor(){
+    this.pos=new THREE.Vector3(0,0,6);
+    this.facing=Math.PI; this.onGround=true; this.yVel=0;
+    this.walkPhase=0; this.isFishing=false;
+    this.parts={}; this.group=new THREE.Group(); scene.add(this.group);
+    this._build();
+  }
+  _m(geo,col,x=0,y=0,z=0){
+    const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+    m.castShadow=true; m.receiveShadow=true; m.position.set(x,y,z); return m;
+  }
+  _build(){
+    const BG=THREE.BoxGeometry,CG=THREE.CylinderGeometry;
+    // Torso: blue hoodie
+    this.parts.torso=this._m(new BG(.52,.72,.34),0x1565c0,0,1.06,0); this.group.add(this.parts.torso);
+    this.group.add(this._m(new BG(.22,.18,.04),0x0d47a1,0,.84,.18)); // pocket
+    // Head + blue eyes
+    this.parts.head=this._m(new BG(.46,.5,.44),0xffcc80,0,1.74,0); this.group.add(this.parts.head);
+    this.group.add(this._m(new BG(.1,.08,.03),0x1565c0,-.12,1.78,.23));
+    this.group.add(this._m(new BG(.1,.08,.03),0x1565c0, .12,1.78,.23));
+    // Blonde hair (plain, no hat)
+    this.group.add(this._m(new BG(.5,.16,.48),0xe6c66b,0,1.96,0));   // top
+    this.group.add(this._m(new BG(.48,.1,.06),0xe6c66b,0,1.9,.21));  // front fringe
+    this.group.add(this._m(new BG(.5,.14,.06),0xe6c66b,0,1.92,-.22)); // back
+    // Legs: swim trunks + bare legs + sandals
+    this.parts.lLP=new THREE.Group(); this.parts.lLP.position.set(.13,.78,0);
+    this.parts.lLP.add(this._m(new BG(.26,.4,.32),0x26a69a,0,-.2,0));   // trunks
+    this.parts.lLP.add(this._m(new BG(.26,.06,.33),0xffeb3b,0,-.38,0)); // trunk hem stripe
+    this.parts.lLP.add(this._m(new BG(.18,.44,.2),0xffcc80,0,-.62,0));  // bare shin
+    this.parts.lLP.add(this._m(new BG(.2,.08,.32),0x6d4c41,0,-.86,.03)); // sandal
+    this.group.add(this.parts.lLP);
+    this.parts.rLP=new THREE.Group(); this.parts.rLP.position.set(-.13,.78,0);
+    this.parts.rLP.add(this._m(new BG(.26,.4,.32),0x26a69a,0,-.2,0));
+    this.parts.rLP.add(this._m(new BG(.26,.06,.33),0xffeb3b,0,-.38,0));
+    this.parts.rLP.add(this._m(new BG(.18,.44,.2),0xffcc80,0,-.62,0));
+    this.parts.rLP.add(this._m(new BG(.2,.08,.32),0x6d4c41,0,-.86,.03));
+    this.group.add(this.parts.rLP);
+    // Arms
+    this.parts.lAP=new THREE.Group(); this.parts.lAP.position.set(.35,1.48,0);
+    this.parts.lAP.add(this._m(new BG(.2,.72,.24),0x1565c0,0,-.36,0));
+    this.parts.lAP.add(this._m(new BG(.18,.2,.22),0xffcc80,0,-.76,0));
+    this.group.add(this.parts.lAP);
+    this.parts.rAP=new THREE.Group(); this.parts.rAP.position.set(-.35,1.48,0);
+    this.parts.rAP.add(this._m(new BG(.2,.72,.24),0x1565c0,0,-.36,0));
+    this.parts.rAP.add(this._m(new BG(.18,.2,.22),0xffcc80,0,-.76,0));
+    // Fishing rod (held in right hand)
+    const rod=this._m(new CG(.018,.012,1.65,6),0x5d4037,0,-1.38,0);
+    this.parts.rAP.add(rod);
+    // Line guide rings on rod
+    [-.85,-.55,-.25].forEach(ry=>{
+      const ring=this._m(new CG(.02,.02,.04,6),0x9e9e9e,0,ry,0);
+      ring.rotation.x=Math.PI/2; this.parts.rAP.add(ring);
+    });
+    this.group.add(this.parts.rAP);
+  }
+  startFishing(){
+    this.isFishing=true;
+    this.pos.set(0,0,-5.5);
+    this.facing=Math.PI; // face pond
+  }
+  stopFishing(){
+    this.isFishing=false;
+    ['rAP','lAP','lLP','rLP'].forEach(k=>{
+      this.parts[k].rotation.x=0; this.parts[k].rotation.z=0;
+    });
+  }
+  getRodTip(){
+    // Rod tip in world space when fishing pose (facing=PI, rAP.rotation.x~-2.1)
+    return new THREE.Vector3(this.pos.x, this.pos.y+2.45, this.pos.z-.9);
+  }
+  update(dt,input,camTheta){
+    if(this.isFishing){
+      this.parts.rAP.rotation.x+=(-2.1-this.parts.rAP.rotation.x)*10*dt;
+      this.parts.lAP.rotation.x+=(-.15-this.parts.lAP.rotation.x)*8*dt;
+      this.parts.lAP.rotation.z+=(.18-this.parts.lAP.rotation.z)*8*dt;
+      this.parts.head.position.y=1.74+Math.sin(Date.now()*.0015)*.02;
+      this.group.position.copy(this.pos);
+      this.group.rotation.y=this.facing;
+      return;
+    }
+    let mx=0,mz=0;
+    const sinT=Math.sin(camTheta),cosT=Math.cos(camTheta);
+    if(input.forward){mx-=sinT;mz-=cosT;}
+    if(input.backward){mx+=sinT;mz+=cosT;}
+    if(input.left){mx-=cosT;mz+=sinT;}
+    if(input.right){mx+=cosT;mz-=sinT;}
+    const len=Math.sqrt(mx*mx+mz*mz);
+    const moving=len>.01;
+    if(moving){mx/=len;mz/=len;this.facing=Math.atan2(mx,mz);}
+    const spd=input.sprint?6.5:3.8;
+    this.pos.x=Math.max(-13,Math.min(13,this.pos.x+mx*spd*dt));
+    this.pos.z=Math.max(-13,Math.min(13,this.pos.z+mz*spd*dt));
+    if(input.jump&&this.onGround){this.yVel=6;this.onGround=false;}
+    if(!this.onGround){
+      this.yVel-=18*dt; this.pos.y+=this.yVel*dt;
+      if(this.pos.y<=0){this.pos.y=0;this.yVel=0;this.onGround=true;}
+    }
+    this.group.position.copy(this.pos);
+    this.group.rotation.y=this.facing;
+    this._anim(dt,moving,input.sprint);
+  }
+  _anim(dt,moving,sprint){
+    if(moving){
+      this.walkPhase+=dt*(sprint?9:6);
+      const s=Math.sin(this.walkPhase)*.68;
+      this.parts.lLP.rotation.x=s; this.parts.rLP.rotation.x=-s;
+      this.parts.lAP.rotation.x=-s*.5; this.parts.rAP.rotation.x=s*.5;
+      this.parts.lAP.rotation.z=0; this.parts.rAP.rotation.z=0;
+    } else {
+      ['lLP','rLP','lAP','rAP'].forEach(k=>this.parts[k].rotation.x*=.85);
+      this.parts.lAP.rotation.z*=.85; this.parts.rAP.rotation.z*=.85;
+      this.parts.head.position.y=1.74+Math.sin(Date.now()*.0018)*.025;
+    }
+  }
+}
+
+const player=new WyattPlayer();
+
+// ─── BOBBER + LINE ────────────────────────────────────────────────────────────
+const BOBBER_REST=new THREE.Vector3(0,.08,-9.5);
+const castStart=new THREE.Vector3();
+
+const bobberGroup=new THREE.Group();
+const bTop=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),new THREE.MeshLambertMaterial({color:0xef4444}));
+bTop.position.y=.08;
+const bBot=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),new THREE.MeshLambertMaterial({color:0xfafafa}));
+bBot.position.y=-.04;
+bobberGroup.add(bTop,bBot);
+bobberGroup.position.copy(BOBBER_REST);
+bobberGroup.visible=false;
+scene.add(bobberGroup);
+
+const linePoints=[new THREE.Vector3(),new THREE.Vector3()];
+const lineGeo=new THREE.BufferGeometry().setFromPoints(linePoints);
+const lineMesh=new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xdddddd}));
+lineMesh.visible=false;
+scene.add(lineMesh);
+
+// ─── FISH CATCH EFFECT ────────────────────────────────────────────────────────
+const FISH_COLS =[0x4fc3f7,0xff8a65,0xce93d8,0x80cbc4,0xffb74d];
+const FISH_NAMES=['Bass','Bluegill','Perch','Trout','Catfish'];
+let catchEffect=null;
+
+function spawnCatch(idx){
+  if(catchEffect){scene.remove(catchEffect);catchEffect=null;}
+  const col=FISH_COLS[idx%FISH_COLS.length];
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.SphereGeometry(.2,8,6),new THREE.MeshLambertMaterial({color:col}));
+  body.scale.set(1.9,1,1); g.add(body);
+  const tail=new THREE.Mesh(new THREE.ConeGeometry(.12,.2,4),new THREE.MeshLambertMaterial({color:col}));
+  tail.rotation.z=Math.PI/2; tail.position.x=-.38; g.add(tail);
+  const eye=new THREE.Mesh(new THREE.SphereGeometry(.055,6,4),new THREE.MeshLambertMaterial({color:0xfafafa}));
+  eye.position.set(.18,.1,.17); g.add(eye);
+  g.position.copy(BOBBER_REST);
+  g.userData={t:0,life:.9};
+  scene.add(g); catchEffect=g;
+}
+
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+const DOCK_POS=new THREE.Vector3(0,0,-5.5);
+const TARGET_FISH=5;
+
+// Difficulty per pond (stage): faster slider, smaller green/yellow half-widths, shorter bite window
+const STAGES=[
+  {sliderBase:1.05, green:0.15, yellow:0.30, bite:4.5},
+  {sliderBase:1.35, green:0.13, yellow:0.27, bite:3.8},
+  {sliderBase:1.70, green:0.11, yellow:0.24, bite:3.2},
+  {sliderBase:2.05, green:0.09, yellow:0.21, bite:2.7},
+  {sliderBase:2.45, green:0.07, yellow:0.18, bite:2.3},
+];
+let currentStage=0;
+function setStage(i){ currentStage=i; }
+
+let fishState='idle'; // idle|casting|waiting|bite|hooked|missed
+let stateTimer=0;
+let fishCaught=0,misses=0;
+let levelActive=false,levelDone=false,levelStartT=0;
+
+// slider state
+let sliderPos=0.5,sliderDir=1;
+const sliderNeedle=document.getElementById('slider-needle');
+const sliderWrap=document.getElementById('slider-wrap');
+function sliderSpeed(){ return STAGES[currentStage].sliderBase+fishCaught*0.22; }
+function applySliderZones(){
+  const c=STAGES[currentStage];
+  const g0=((0.5-c.green)*100).toFixed(1), g1=((0.5+c.green)*100).toFixed(1);
+  const y0=((0.5-c.yellow)*100).toFixed(1), y1=((0.5+c.yellow)*100).toFixed(1);
+  document.getElementById('slider-bar').style.background=
+    `linear-gradient(to right,#e53935 0%,#e53935 ${y0}%,#fb8c00 ${y0}%,#fb8c00 ${g0}%,`+
+    `#43a047 ${g0}%,#43a047 ${g1}%,#fb8c00 ${g1}%,#fb8c00 ${y1}%,#e53935 ${y1}%,#e53935 100%)`;
+}
+function showSlider(){ sliderPos=0.1; sliderDir=1; applySliderZones(); sliderWrap.style.display='flex'; }
+function hideSlider(){ sliderWrap.style.display='none'; }
+function updateSlider(dt){
+  sliderPos+=sliderDir*sliderSpeed()*dt;
+  if(sliderPos>=1){sliderPos=1;sliderDir=-1;}
+  if(sliderPos<=0){sliderPos=0;sliderDir=1;}
+  sliderNeedle.style.left=(sliderPos*100)+'%';
+}
+function resolveSlider(){
+  const c=STAGES[currentStage];
+  const d=Math.abs(sliderPos-0.5);
+  if(d<=c.green) return 'green';
+  if(d<=c.yellow) return 'yellow';
+  return 'red';
+}
+
+const fishPips=[0,1,2,3,4].map(i=>document.getElementById('fp'+i));
+
+function updateHud(){
+  fishPips.forEach((p,i)=>{p.className='fish-pip'+(i<fishCaught?' caught':'');});
+  document.getElementById('misses-badge').textContent='Misses: '+misses;
+}
+
+const biteFlashEl=document.getElementById('bite-flash');
+let flashTimer=0;
+function showFlash(txt,col){
+  biteFlashEl.textContent=txt; biteFlashEl.style.color=col;
+  biteFlashEl.style.opacity='1'; flashTimer=.65;
+}
+
+function startCast(){
+  fishState='casting'; stateTimer=.55;
+  castStart.set(player.pos.x,player.pos.y+2.4,player.pos.z-.9);
+  bobberGroup.position.copy(castStart);
+  bobberGroup.visible=true; lineMesh.visible=true;
+  snd_cast(); setTimeout(snd_splash,340);
+  document.getElementById('cast-hint').style.display='block';
+}
+function startWait(){
+  fishState='waiting'; stateTimer=1.8+Math.random()*3.2;
+  bobberGroup.position.copy(BOBBER_REST);
+}
+function triggerBite(){
+  fishState='bite'; stateTimer=STAGES[currentStage].bite;
+  snd_bite(); showSlider();
+}
+function hookFish(){
+  if(fishState!=='bite')return;
+  hideSlider();
+  const zone=resolveSlider();
+  if(zone==='red'||(zone==='yellow'&&Math.random()<0.5)){
+    missBite(); return;
+  }
+  fishCaught++;
+  fishState='hooked'; stateTimer=1.0;
+  snd_catch();
+  const label=zone==='green'?'PERFECT! 🎣':'NICE CATCH! 🐟';
+  showFlash(label,'#fff');
+  spawnCatch(fishCaught-1);
+  updateHud();
+  if(fishCaught>=TARGET_FISH)setTimeout(winLevel,1000);
+}
+function missBite(){
+  hideSlider();
+  misses++;
+  fishState='missed'; stateTimer=.7;
+  snd_miss(); showFlash('MISSED!','#ef9a9a');
+  updateHud();
+}
+
+function saveStars(lvl,s){
+  const k='tuck_stars_'+lvl;
+  if(s>parseInt(localStorage.getItem(k)||'0'))localStorage.setItem(k,String(s));
+  if(window.Ach) Ach.check();
+  const el=document.getElementById('win-stars-earned');
+  if(el)el.textContent='★'.repeat(s)+'☆'.repeat(3-s);
+}
+function winLevel(){
+  levelDone=true; levelActive=false;
+  bobberGroup.visible=false; lineMesh.visible=false;
+  hideSlider();
+  document.getElementById('cast-hint').style.display='none';
+  document.getElementById('approach-hint').style.display='none';
+  const secs=((performance.now()-levelStartT)/1000).toFixed(1);
+  document.getElementById('win-fish').textContent='Caught '+fishCaught+' fish in '+secs+'s!';
+  document.getElementById('win-misses').textContent='Misses: '+misses;
+  const last=currentStage>=STAGES.length-1;
+  const nextBtn=document.getElementById('next-btn');
+  const winTitle=document.querySelector('.win-title');
+  if(last){
+    winTitle.textContent='NICE CATCH!';
+    nextBtn.textContent='Next Level →'; nextBtn.dataset.action='menu';
+    saveStars(7,misses===0?3:misses<=2?2:1);
+  }else{
+    winTitle.textContent=`POND ${currentStage+1} DONE!`;
+    nextBtn.textContent='Next Pond →'; nextBtn.dataset.action='next';
+    document.getElementById('win-stars-earned').textContent=`Pond ${currentStage+1} / ${STAGES.length}`;
+  }
+  document.getElementById('win').style.display='flex';
+  audioCtx.resume().then(snd_win);
+}
+
+function startLevel(){
+  document.getElementById('intro').style.display='none';
+  document.getElementById('hud').style.display='flex';
+  document.getElementById('fish-hud').style.display='flex';
+  levelActive=true; levelStartT=performance.now();
+  updateHud();
+  audioCtx.resume().then(startBirds);
+}
+
+function resetLevel(){
+  document.getElementById('win').style.display='none';
+  fishCaught=0; misses=0; levelDone=false; fishState='idle';
+  bobberGroup.visible=false; lineMesh.visible=false;
+  if(catchEffect){scene.remove(catchEffect);catchEffect=null;}
+  biteFlashEl.style.opacity='0';
+  hideSlider();
+  document.getElementById('cast-hint').style.display='none';
+  player.pos.set(0,0,6); player.facing=Math.PI;
+  if(player.isFishing)player.stopFishing();
+  updateHud();
+  startLevel();
+}
+
+// ─── INPUT ────────────────────────────────────────────────────────────────────
+const keys={forward:false,backward:false,left:false,right:false,sprint:false,jump:false};
+
+document.addEventListener('keydown',e=>{
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    keys.forward=true;  break;
+    case'KeyS':case'ArrowDown':  keys.backward=true; break;
+    case'KeyA':case'ArrowLeft':  keys.left=true;     break;
+    case'KeyD':case'ArrowRight': keys.right=true;    break;
+    case'ShiftLeft':case'ShiftRight':keys.sprint=true;break;
+    case'Space':
+      e.preventDefault();
+      if(levelActive&&fishState==='bite')hookFish();
+      break;
+    case'KeyE':
+      if(levelActive&&!player.isFishing&&!levelDone){
+        if(player.pos.distanceTo(DOCK_POS)<2.5){
+          player.startFishing(); startCast();
+          audioCtx.resume().then(startBirds);
+        }
+      }
+      break;
+  }
+});
+document.addEventListener('keyup',e=>{
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    keys.forward=false;  break;
+    case'KeyS':case'ArrowDown':  keys.backward=false; break;
+    case'KeyA':case'ArrowLeft':  keys.left=false;     break;
+    case'KeyD':case'ArrowRight': keys.right=false;    break;
+    case'ShiftLeft':case'ShiftRight':keys.sprint=false;break;
+  }
+});
+
+// ─── CAMERA ───────────────────────────────────────────────────────────────────
+let camTheta=0,camPhi=.36;
+let rmbDown=false,lastMX=0,lastMY=0;
+const CAM_DIST=7.5;
+const camTarget=new THREE.Vector3(),camWant=new THREE.Vector3();
+
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('mousedown',e=>{if(e.button===2){rmbDown=true;lastMX=e.clientX;lastMY=e.clientY;}});
+window.addEventListener('mouseup',e=>{if(e.button===2)rmbDown=false;});
+window.addEventListener('mousemove',e=>{
+  if(!rmbDown)return;
+  camTheta-=(e.clientX-lastMX)*.005; camPhi-=(e.clientY-lastMY)*.005;
+  camPhi=Math.max(.05,Math.min(1.25,camPhi)); lastMX=e.clientX; lastMY=e.clientY;
+});
+
+function updateCamera(dt){
+  const px=player.pos.x,py=player.pos.y+1.1,pz=player.pos.z;
+  camWant.set(
+    px+Math.sin(camTheta)*Math.cos(camPhi)*CAM_DIST,
+    py+Math.sin(camPhi)*CAM_DIST,
+    pz+Math.cos(camTheta)*Math.cos(camPhi)*CAM_DIST
+  );
+  const a=1-Math.pow(.01,dt);
+  camera.position.lerp(camWant,a);
+  camTarget.lerp(new THREE.Vector3(px,py,pz),a);
+  camera.lookAt(camTarget);
+}
+
+// ─── GAME LOOP ────────────────────────────────────────────────────────────────
+let prev=performance.now(),elapsed=0;
+
+function tick(){
+  requestAnimationFrame(tick);
+  const now=performance.now(),dt=Math.min((now-prev)/1000,.05);
+  prev=now; elapsed+=dt;
+
+  player.update(dt,keys,camTheta);
+
+  if(levelActive){
+    // Approach hint
+    const nearDock=player.pos.distanceTo(DOCK_POS)<2.5;
+    document.getElementById('approach-hint').style.display=
+      (!player.isFishing&&nearDock)?'block':'none';
+
+    if(player.isFishing&&!levelDone){
+      stateTimer-=dt;
+      flashTimer-=dt; if(flashTimer<=0)biteFlashEl.style.opacity='0';
+
+      // Update fishing line rod tip → bobber
+      const tip=player.getRodTip();
+      linePoints[0].copy(tip); linePoints[1].copy(bobberGroup.position);
+      lineGeo.setFromPoints(linePoints);
+      lineGeo.attributes.position.needsUpdate=true;
+
+      // Bobber animation by state
+      if(fishState==='casting'){
+        const t=1-stateTimer/.55;
+        bobberGroup.position.x=castStart.x+(BOBBER_REST.x-castStart.x)*t;
+        bobberGroup.position.y=castStart.y+(BOBBER_REST.y-castStart.y)*t+Math.sin(t*Math.PI)*1.8;
+        bobberGroup.position.z=castStart.z+(BOBBER_REST.z-castStart.z)*t;
+      }
+      if(fishState==='waiting'){
+        bobberGroup.position.y=BOBBER_REST.y+Math.sin(elapsed*2.6)*.022;
+      }
+      if(fishState==='bite'){
+        bobberGroup.position.y=BOBBER_REST.y-Math.abs(Math.sin(elapsed*6))*.26;
+        bTop.material.color.setHex(Math.floor(elapsed*10)%2===0?0xef4444:0xffee58);
+        updateSlider(dt);
+      }
+      if(fishState!=='bite') bTop.material.color.setHex(0xef4444);
+
+      // State transitions
+      switch(fishState){
+        case'casting': if(stateTimer<=0)startWait(); break;
+        case'waiting': if(stateTimer<=0)triggerBite(); break;
+        case'bite':    if(stateTimer<=0)missBite(); break;
+        case'hooked':  if(stateTimer<=0&&fishCaught<TARGET_FISH)startCast(); break;
+        case'missed':  if(stateTimer<=0)startCast(); break;
+      }
+    }
+
+    // Catch effect arc animation
+    if(catchEffect){
+      catchEffect.userData.t+=dt;
+      const t=catchEffect.userData.t,life=.9;
+      catchEffect.position.y=BOBBER_REST.y+Math.sin(t*Math.PI/life)*3.0;
+      catchEffect.position.x=BOBBER_REST.x+t*.6;
+      catchEffect.position.z=BOBBER_REST.z+t*1.8;
+      catchEffect.rotation.y+=dt*5; catchEffect.rotation.z+=dt*3;
+      catchEffect.userData.life-=dt;
+      if(catchEffect.userData.life<=0){scene.remove(catchEffect);catchEffect=null;}
+    }
+  }
+
+  // Cloud drift
+  clouds.forEach(c=>{
+    c.position.x+=c.userData.spd*dt;
+    if(c.position.x>28)c.position.x=-28;
+    if(c.position.x<-28)c.position.x=28;
+  });
+
+  updateCamera(dt);
+  renderer.render(scene,camera);
+}
+
+document.getElementById('intro-btn').addEventListener('click',startLevel);
+document.getElementById('replay-btn').addEventListener('click',resetLevel);
+document.getElementById('next-btn').addEventListener('click',()=>{
+  if(document.getElementById('next-btn').dataset.action==='next'){
+    setStage(currentStage+1);
+    resetLevel();
+  }else{
+    window.location.href='level8.html';
+  }
+});
+
+tick();
+
+// ── Mobile touch controls ──
+if(Mobile.ready){
+  Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.button({label:'CAST',code:'KeyE'});
+  Mobile.button({label:'HOOK',code:'Space'});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neighborhood Kids – Brooklynn</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; overflow:hidden; font-family:'Arial Rounded MT Bold',Arial,sans-serif; }
+canvas#c { display:block; width:100vw; height:100vh; }
+
+#intro {
+  position:fixed; inset:0; background:rgba(5,5,20,.92);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; z-index:100;
+}
+.lvl-tag  { color:#f48fb1; font-size:13px; letter-spacing:4px; text-transform:uppercase; }
+.lvl-name { color:#fff; font-size:62px; font-weight:900; letter-spacing:6px; text-transform:uppercase; }
+.lvl-desc { color:rgba(255,255,255,.6); font-size:15px; text-align:center; max-width:440px; line-height:1.7; }
+#intro-btn {
+  margin-top:10px; padding:14px 48px; font-size:18px; font-weight:bold;
+  background:#e91e63; color:#fff; border:none; border-radius:30px;
+  cursor:pointer; letter-spacing:2px; text-transform:uppercase;
+  box-shadow:0 4px 16px rgba(233,30,99,.55); transition:transform .1s;
+}
+#intro-btn:hover { transform:scale(1.05); }
+
+#approach-hint {
+  position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,.75); color:#f8bbd0; padding:8px 24px;
+  border-radius:20px; font-size:14px; letter-spacing:1px; display:none; white-space:nowrap;
+}
+
+/* ── Drawing overlay ── */
+#draw-overlay {
+  position:fixed; inset:0; display:none;
+  flex-direction:column; align-items:center; justify-content:center;
+  z-index:50; background:rgba(0,0,0,.68);
+}
+#draw-container { display:flex; flex-direction:column; align-items:center; gap:10px; }
+#draw-top {
+  display:flex; justify-content:space-between; align-items:center;
+  width:min(480px,90vw);
+}
+#draw-title { color:rgba(255,255,255,.75); font-size:14px; letter-spacing:1px; }
+#clear-btn {
+  padding:5px 16px; background:rgba(255,255,255,.12); color:#fff;
+  border:none; border-radius:16px; cursor:pointer; font-size:13px;
+  letter-spacing:1px; transition:background .15s;
+}
+#clear-btn:hover { background:rgba(255,255,255,.24); }
+#draw-canvas {
+  width:min(480px,90vw); height:min(480px,90vw);
+  cursor:crosshair; border-radius:12px;
+  border:2px solid rgba(255,255,255,.14);
+  background:rgba(8,4,18,.88); display:block;
+}
+#prog-wrap { display:flex; align-items:center; gap:12px; width:min(480px,90vw); }
+#prog-bar  { flex:1; height:12px; background:rgba(255,255,255,.15); border-radius:6px; overflow:hidden; }
+#prog-fill { height:100%; width:0%; background:linear-gradient(90deg,#e91e63,#ff6090); border-radius:6px; transition:width .12s; }
+#prog-label{ color:#f48fb1; font-size:15px; font-weight:bold; min-width:46px; text-align:right; }
+
+/* ── Win / fail screens ── */
+#win, #fail {
+  position:fixed; inset:0; display:none;
+  flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; z-index:100;
+}
+#win  { background:rgba(5,5,20,.92); }
+#fail { background:rgba(20,5,10,.92); }
+.win-title  { color:#f48fb1; font-size:52px; font-weight:900; letter-spacing:4px; }
+.fail-title { color:#ef9a9a; font-size:52px; font-weight:900; letter-spacing:4px; }
+.win-stat   { color:rgba(255,255,255,.75); font-size:16px; }
+.win-btns   { display:flex; gap:12px; margin-top:8px; }
+.win-btn    { padding:12px 36px; font-size:15px; font-weight:bold; letter-spacing:2px;
+              text-transform:uppercase; border:none; border-radius:24px; cursor:pointer; }
+.win-btn.primary   { background:#e91e63; color:#fff; }
+.win-btn.secondary { background:rgba(255,255,255,.12); color:#fff; }
+
+#instr {
+  position:fixed; bottom:16px; left:16px;
+  color:rgba(255,255,255,.38); font-size:12px; line-height:1.8; letter-spacing:1px;
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="intro">
+  <div class="lvl-tag">Level 05</div>
+  <div class="lvl-name">BROOKLYNN</div>
+  <div class="lvl-desc">Brooklynn loves art more than anything.<br>Walk up to the easel and trace each shape — 5 paintings to finish!</div>
+  <button id="intro-btn">LET'S GO!</button>
+</div>
+
+<div id="approach-hint">Press <b>E</b> to paint</div>
+
+<div id="draw-overlay">
+  <div id="draw-container">
+    <div id="draw-top">
+      <div id="draw-title">✏️ Hold left-click and trace the outline</div>
+      <button id="clear-btn">Clear</button>
+    </div>
+    <canvas id="draw-canvas" width="480" height="480"></canvas>
+    <div id="prog-wrap">
+      <div id="prog-bar"><div id="prog-fill"></div></div>
+      <div id="prog-label">0%</div>
+    </div>
+  </div>
+</div>
+
+<div id="win">
+  <div class="win-title">🎨 MASTERPIECE!</div>
+  <div class="win-stat" id="win-cov"></div>
+  <div id="win-stars-earned" style="font-size:38px;color:#ffd54f;letter-spacing:8px;margin:6px 0"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="replay-btn">Paint Again</button>
+    <button class="win-btn secondary" id="next-btn">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="fail">
+  <div class="fail-title">😬 ALMOST!</div>
+  <div class="win-stat" id="fail-cov"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="retry-btn">Try Again</button>
+    <button class="win-btn secondary" id="fail-menu-btn">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="instr">WASD move · Shift sprint · E paint at easel<br>During painting: hold left-click and trace the star</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="mobile.js"></script>
+<script src="achievements.js"></script>
+<script>
+'use strict';
+
+// ─── AUDIO ────────────────────────────────────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+let scratchTimer = 0;
+function playScratch(){
+  const buf=audioCtx.createBuffer(1,512,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<512;i++) d[i]=(Math.random()*2-1);
+  const src=audioCtx.createBufferSource();
+  const g=audioCtx.createGain();
+  const f=audioCtx.createBiquadFilter();
+  f.type='bandpass'; f.frequency.value=2800; f.Q.value=.8;
+  src.buffer=buf;
+  src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+  g.gain.setValueAtTime(.032,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.09);
+  src.start(); src.stop(audioCtx.currentTime+.1);
+}
+
+function playWin(){
+  [523,659,784,880,1047].forEach((f,i)=>{
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.value=f;
+    o.connect(g); g.connect(audioCtx.destination);
+    const t=audioCtx.currentTime+i*.13;
+    g.gain.setValueAtTime(.16,t); g.gain.exponentialRampToValueAtTime(.001,t+.55);
+    o.start(t); o.stop(t+.6);
+  });
+}
+
+// ─── THREE.JS ─────────────────────────────────────────────────────────────────
+const canvas3d = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas:canvas3d, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x1a2a1a);
+scene.fog=new THREE.Fog(0x1a2a1a,18,36);
+
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,100);
+camera.position.set(0,4,9);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffccee,.6));
+const sun=new THREE.DirectionalLight(0xfff3e0,1.2);
+sun.position.set(4,9,5); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-14; sun.shadow.camera.right=14;
+sun.shadow.camera.top=14;  sun.shadow.camera.bottom=-14;
+sun.shadow.camera.far=40;  scene.add(sun);
+
+// Warm fill from window direction
+const fill=new THREE.DirectionalLight(0xffe0b2,.5);
+fill.position.set(-3,6,-8); scene.add(fill);
+
+// ─── HELPER ───────────────────────────────────────────────────────────────────
+function M(geo,col){ const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col})); m.castShadow=true; m.receiveShadow=true; return m; }
+
+// ─── ART ROOM ─────────────────────────────────────────────────────────────────
+(function buildRoom(){
+  // Floor (warm beige parquet)
+  const fl=M(new THREE.PlaneGeometry(24,20),0xd7ccc8); fl.rotation.x=-Math.PI/2; fl.castShadow=false; scene.add(fl);
+  for(let z=-9;z<10;z+=1.2){
+    const pk=M(new THREE.BoxGeometry(24,.012,.96),0xc8b8a2); pk.position.set(0,.006,z); pk.castShadow=false; scene.add(pk);
+  }
+
+  // Walls (soft warm cream/ivory)
+  const bw=M(new THREE.BoxGeometry(24,.01,11),0xfff8e1); bw.rotation.x=Math.PI/2; bw.position.set(0,5.5,-10); bw.castShadow=false; scene.add(bw);
+  const lw=M(new THREE.BoxGeometry(.01,11,20),0xfff3e0); lw.position.set(-12,5.5,0); lw.castShadow=false; scene.add(lw);
+  const rw=lw.clone(); rw.position.x=12; scene.add(rw);
+  const cw=M(new THREE.PlaneGeometry(24,20),0xf9fbe7); cw.rotation.x=Math.PI/2; cw.position.y=11; cw.castShadow=false; scene.add(cw);
+
+  // Colorful wainscoting strip along base of walls
+  const wain=M(new THREE.BoxGeometry(24,.01,1.2),0x80cbc4); wain.rotation.x=Math.PI/2; wain.position.set(0,.6,-9.94); wain.castShadow=false; scene.add(wain);
+
+  // Window (back wall center)
+  const wFrame=M(new THREE.BoxGeometry(3.4,3.4,.14),0xd7ccc8); wFrame.position.set(0,3.8,-9.92); scene.add(wFrame);
+  const wGlass=M(new THREE.BoxGeometry(2.9,2.9,.06),0x81d4fa); wGlass.position.set(0,3.8,-9.88); scene.add(wGlass);
+  const wMullH=M(new THREE.BoxGeometry(3,.08,.08),0xd7ccc8); wMullH.position.set(0,3.8,-9.85); scene.add(wMullH);
+  const wMullV=M(new THREE.BoxGeometry(.08,3,.08),0xd7ccc8); wMullV.position.set(0,3.8,-9.85); scene.add(wMullV);
+  // Curtains
+  [[-1.8,.3],[ 1.8,-.3]].forEach(([dx,rz])=>{
+    const c=M(new THREE.BoxGeometry(.9,3.8,.12),0xf06292); c.position.set(dx,3.8,-9.8); c.rotation.z=rz; scene.add(c);
+  });
+
+  // Paintings on left wall (3 colorful canvases in dark frames)
+  const paintings=[
+    {x:-11.9,y:4.5,z:-5, w:2.2,h:1.8, bg:0xffcc02, ac:0xe91e63},
+    {x:-11.9,y:4.5,z:0,  w:1.8,h:2.2, bg:0x29b6f6, ac:0xffd740},
+    {x:-11.9,y:4.5,z:5,  w:2.0,h:1.6, bg:0xa5d6a7, ac:0xe040fb},
+  ];
+  paintings.forEach(p=>{
+    const fr=M(new THREE.BoxGeometry(.06,p.h+.18,p.w+.18),0x5d4037); fr.position.set(p.x,p.y,p.z); scene.add(fr);
+    const bg=M(new THREE.BoxGeometry(.04,p.h,p.w),p.bg); bg.position.set(p.x+.05,p.y,p.z); scene.add(bg);
+    // Abstract shape on painting
+    const sh=M(new THREE.BoxGeometry(.03,p.h*.5,p.w*.4),p.ac); sh.position.set(p.x+.07,p.y,p.z); scene.add(sh);
+  });
+
+  // Art shelf on right wall with supplies
+  const sh=M(new THREE.BoxGeometry(.1,12,1.8),0xd7ccc8); sh.position.set(11.9,3.5,0); sh.castShadow=false; scene.add(sh);
+  [2,4,6].forEach(y=>{
+    const shBoard=M(new THREE.BoxGeometry(.18,1.8,.12),0xd7ccc8); shBoard.rotation.x=Math.PI/2; shBoard.position.set(11.8,y,0); scene.add(shBoard);
+  });
+  // Paint jars on shelf
+  [[0xf44336,-3],[0x2196f3,0],[0xffeb3b,3],[0x4caf50,-1.5],[0xe91e63,1.5]].forEach(([c,z])=>{
+    const jar=M(new THREE.CylinderGeometry(.12,.12,.28,8),c); jar.position.set(11.5,4.2,z); scene.add(jar);
+    const lid=M(new THREE.CylinderGeometry(.13,.13,.06,8),0xffffff); lid.position.set(11.5,4.37,z); scene.add(lid);
+  });
+
+  // Art desk (right side)
+  const dt=M(new THREE.BoxGeometry(3.8,.14,2),0xbcaaa4); dt.position.set(7.5,2.52,-8.2); scene.add(dt);
+  [[-1.8],[ 1.8]].forEach(([dx])=>{
+    [[dx,1.25,-7.2],[dx,1.25,-9.2]].forEach(([x,y,z])=>{
+      const leg=M(new THREE.BoxGeometry(.12,2.52,.12),0xa1887f); leg.position.set(x,y,z); scene.add(leg);
+    });
+  });
+  // Palette on desk
+  const pal=M(new THREE.BoxGeometry(.7,.04,.55),0xf5f5dc); pal.position.set(7.5,2.61,-8.2); pal.rotation.y=.3; scene.add(pal);
+  // Color blobs on palette
+  [[0xf44336,-.18,.04],[0x2196f3,.02,.12],[0xffeb3b,.2,-.08]].forEach(([c,dx,dz])=>{
+    const blob=M(new THREE.CylinderGeometry(.08,.08,.02,8),c); blob.position.set(7.5+dx,2.65,-8.2+dz); scene.add(blob);
+  });
+  // Brushes in a cup
+  const cup=M(new THREE.CylinderGeometry(.1,.09,.24,8),0x795548); cup.position.set(8.6,2.66,-8.2); scene.add(cup);
+  for(let b=0;b<5;b++){
+    const bsh=M(new THREE.CylinderGeometry(.008,.008,.48,4),[0x8d6e63,0xf44336,0x2196f3,0x4caf50,0xffeb3b][b]);
+    bsh.position.set(8.6+Math.sin(b*1.2)*.06, 2.9+b*.02, -8.2+Math.cos(b*1.2)*.06);
+    bsh.rotation.z=(b-2)*.08; scene.add(bsh);
+  }
+
+  // Cozy rug under easel area
+  const rug=M(new THREE.CylinderGeometry(3,3,.012,32),0xe91e63); rug.position.set(0,.013,0); rug.castShadow=false; scene.add(rug);
+  const rugInner=M(new THREE.CylinderGeometry(2.5,2.5,.015,32),0xf8bbd0); rugInner.position.set(0,.016,0); rugInner.castShadow=false; scene.add(rugInner);
+
+  // Bean bag chair (left)
+  const bb=M(new THREE.SphereGeometry(1,10,8),0x80cbc4); bb.scale.set(1,.7,1); bb.position.set(-6.5,.7,3); scene.add(bb);
+  const bbTop=M(new THREE.SphereGeometry(.6,8,6),0x80cbc4); bbTop.position.set(-6.5,1.3,3); scene.add(bbTop);
+
+  // Stack of sketchbooks (right corner)
+  [0,1,2].forEach(i=>{
+    const bk=M(new THREE.BoxGeometry(1.2,.12,.9),[0xf8bbd0,0xb2ebf2,0xdcedc8][i]);
+    bk.position.set(9.5,.06+i*.13,6); bk.rotation.y=(i*.15-.15); scene.add(bk);
+  });
+})();
+
+// ─── EASEL ────────────────────────────────────────────────────────────────────
+const EASEL_POS = new THREE.Vector3(0,0,0);
+let glowRing;
+
+(function buildEasel(){
+  const g=new THREE.Group();
+  const wood=new THREE.MeshLambertMaterial({color:0x8d6e63});
+
+  // Two front legs (A-frame)
+  [-.38,.38].forEach((dx,i)=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(.055,1.95,.055),wood);
+    leg.position.set(dx,.975,0); leg.rotation.z=dx>.0?.1:-.1; leg.castShadow=true; g.add(leg);
+  });
+  // Back support leg
+  const back=new THREE.Mesh(new THREE.BoxGeometry(.055,1.6,.055),wood);
+  back.position.set(0,.8,-.48); back.rotation.x=-.22; back.castShadow=true; g.add(back);
+
+  // Cross-braces
+  const cb1=new THREE.Mesh(new THREE.BoxGeometry(.88,.055,.055),wood); cb1.position.set(0,.68,0); g.add(cb1);
+  const cb2=new THREE.Mesh(new THREE.BoxGeometry(.88,.055,.055),wood); cb2.position.set(0,1.52,0); g.add(cb2);
+
+  // Canvas board (white)
+  const cv=new THREE.Mesh(new THREE.BoxGeometry(.82,.96,.04),new THREE.MeshLambertMaterial({color:0xfafafa}));
+  cv.position.set(0,1.08,.03); cv.castShadow=true; g.add(cv);
+  // Canvas border
+  const brd=new THREE.Mesh(new THREE.BoxGeometry(.88,1.02,.02),new THREE.MeshLambertMaterial({color:0xd7ccc8}));
+  brd.position.set(0,1.08,.04); g.add(brd);
+  // Tiny painted star on canvas (teaser)
+  const star=new THREE.Mesh(new THREE.BoxGeometry(.4,.4,.03),new THREE.MeshLambertMaterial({color:0xf8bbd0,transparent:true,opacity:.6}));
+  star.position.set(0,1.08,.06); g.add(star);
+
+  // Glow ring
+  glowRing=new THREE.Mesh(
+    new THREE.RingGeometry(.55,.72,32),
+    new THREE.MeshLambertMaterial({color:0xe91e63,side:THREE.DoubleSide,transparent:true,opacity:.5})
+  );
+  glowRing.rotation.x=-Math.PI/2; glowRing.position.y=.02; g.add(glowRing);
+
+  g.position.copy(EASEL_POS); scene.add(g);
+})();
+
+// ─── BROOKLYNN CHARACTER ──────────────────────────────────────────────────────
+class BrooklynnPlayer {
+  constructor(){
+    this.pos=new THREE.Vector3(0,0,5);
+    this.vel=new THREE.Vector3();
+    this.facing=Math.PI; this.onGround=true; this.yVel=0;
+    this.walkPhase=0; this.drawPhase=0; this.isDrawing=false;
+    this.parts={}; this.group=new THREE.Group(); scene.add(this.group);
+    this._build();
+  }
+
+  _m(geo,col,x=0,y=0,z=0){
+    const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+    m.castShadow=true; m.receiveShadow=true; m.position.set(x,y,z); return m;
+  }
+
+  _build(){
+    const BG=THREE.BoxGeometry, CG=THREE.CylinderGeometry;
+
+    // Torso: teal overalls over pink shirt
+    this.parts.torso=this._m(new BG(.56,1.05,.4),0x80cbc4,0,1.0,0); this.group.add(this.parts.torso);
+    // Shirt collar
+    this.group.add(this._m(new BG(.34,.24,.43),0xf48fb1,0,1.44,0));
+    // Overall straps
+    this.group.add(this._m(new BG(.1,.22,.05),0x4db6ac,-.15,1.5,.2));
+    this.group.add(this._m(new BG(.1,.22,.05),0x4db6ac, .15,1.5,.2));
+
+    // Head
+    this.parts.head=this._m(new BG(.48,.5,.44),0xffe6cf,0,1.72,0); this.group.add(this.parts.head);
+    // Hair base (strawberry blonde with pink streaks)
+    this.group.add(this._m(new BG(.52,.18,.5),0xe6a86b,0,2.0,0));
+    // Pink front streak
+    this.group.add(this._m(new BG(.16,.19,.51),0xf06292,-.14,2.0,0));
+    // Bun on top (pink)
+    this.group.add(this._m(new BG(.3,.24,.26),0xf06292,0,2.17,0));
+    // Ponytail behind (strawberry blonde, pink tip)
+    const ptail=this._m(new BG(.18,.52,.14),0xe6a86b,0,1.72,-.3);
+    this.group.add(ptail);
+    this.group.add(this._m(new BG(.18,.16,.14),0xf06292,0,1.46,-.3));
+    // Scrunchie (pink ring)
+    const sc=this._m(new CG(.14,.1,.06,8),0xe91e63,0,1.89,-.26); sc.rotation.x=Math.PI/2; this.group.add(sc);
+    // Eyes (wide, expressive)
+    const el=this._m(new BG(.11,.1,.04),0x3e2723,-.12,1.78,.23); this.group.add(el);
+    const er=el.clone(); er.position.x=.12; this.group.add(er);
+
+    // Legs: teal pants, pink shoes
+    this.parts.lLP=new THREE.Group(); this.parts.lLP.position.set(.13,.5,0);
+    this.parts.lLP.add(this._m(new BG(.25,.92,.3),0x4db6ac,0,-.45,0));
+    this.parts.lLP.add(this._m(new BG(.24,.22,.34),0xf06292,0,-.96,0));
+    this.group.add(this.parts.lLP);
+    this.parts.rLP=new THREE.Group(); this.parts.rLP.position.set(-.13,.5,0);
+    this.parts.rLP.add(this._m(new BG(.25,.92,.3),0x4db6ac,0,-.45,0));
+    this.parts.rLP.add(this._m(new BG(.24,.22,.34),0xf06292,0,-.96,0));
+    this.group.add(this.parts.rLP);
+
+    // Arms
+    this.parts.lAP=new THREE.Group(); this.parts.lAP.position.set(.37,1.42,0);
+    this.parts.lAP.add(this._m(new BG(.21,.82,.25),0x80cbc4,0,-.41,0));
+    this.parts.lAP.add(this._m(new BG(.19,.22,.22),0xffe6cf,0,-.85,0));
+    this.group.add(this.parts.lAP);
+
+    this.parts.rAP=new THREE.Group(); this.parts.rAP.position.set(-.37,1.42,0);
+    this.parts.rAP.add(this._m(new BG(.21,.82,.25),0x80cbc4,0,-.41,0));
+    this.parts.rAP.add(this._m(new BG(.19,.22,.22),0xffe6cf,0,-.85,0));
+    // Paintbrush in right hand
+    const br=this._m(new CG(.01,.01,.42,6),0x8d6e63,0,-.76,0); this.parts.rAP.add(br);
+    const tip=this._m(new CG(.01,.004,.1,6),0xe91e63,0,-1.0,0); this.parts.rAP.add(tip);
+    this.group.add(this.parts.rAP);
+  }
+
+  startDrawing(){
+    this.isDrawing=true;
+    this.drawPhase=0;
+  }
+  stopDrawing(){ this.isDrawing=false; }
+
+  update(dt,input,camTh){
+    if(this.isDrawing){
+      this.drawPhase+=dt*3.5;
+      // Right arm: extended toward easel, brush moving
+      this.parts.rAP.rotation.x=-1.15+Math.sin(this.drawPhase)*.12;
+      this.parts.rAP.rotation.z= .08+Math.sin(this.drawPhase*1.3)*.05;
+      this.parts.lAP.rotation.x=-.45; this.parts.lAP.rotation.z=.22;
+      this.parts.lLP.rotation.x*=.85; this.parts.rLP.rotation.x*=.85;
+      this.group.position.copy(this.pos); this.group.rotation.y=this.facing;
+      return;
+    }
+    let mx=0,mz=0;
+    if(input.forward ){ mx-=Math.sin(camTh); mz-=Math.cos(camTh); }
+    if(input.backward){ mx+=Math.sin(camTh); mz+=Math.cos(camTh); }
+    if(input.left    ){ mx-=Math.cos(camTh); mz+=Math.sin(camTh); }
+    if(input.right   ){ mx+=Math.cos(camTh); mz-=Math.sin(camTh); }
+    const len=Math.sqrt(mx*mx+mz*mz);
+    if(len>.01){ mx/=len; mz/=len; this.facing=Math.atan2(mx,mz); }
+    const spd=input.sprint?6.5:3.8;
+    this.pos.x+=mx*spd*dt; this.pos.z+=mz*spd*dt;
+    if(input.jump&&this.onGround){ this.yVel=6; this.onGround=false; }
+    if(!this.onGround) this.yVel-=18*dt;
+    this.pos.y+=this.yVel*dt;
+    if(this.pos.y<=0){ this.pos.y=0; this.yVel=0; this.onGround=true; }
+    this.pos.x=Math.max(-10.5,Math.min(10.5,this.pos.x));
+    this.pos.z=Math.max(-8.5,Math.min(8.5,this.pos.z));
+    this.group.position.copy(this.pos); this.group.rotation.y=this.facing;
+    this._anim(dt,len>.01,input.sprint);
+  }
+
+  _anim(dt,moving,sprint){
+    if(moving){
+      this.walkPhase+=dt*(sprint?9:6);
+      const s=Math.sin(this.walkPhase)*.72;
+      this.parts.lLP.rotation.x= s; this.parts.rLP.rotation.x=-s;
+      this.parts.lAP.rotation.x=-s*.55; this.parts.rAP.rotation.x=s*.55;
+      this.parts.lAP.rotation.z=0; this.parts.rAP.rotation.z=0;
+    } else {
+      ['lLP','rLP','lAP','rAP'].forEach(k=>this.parts[k].rotation.x*=.8);
+      this.parts.lAP.rotation.z=0; this.parts.rAP.rotation.z=0;
+      this.parts.head.position.y=1.72+Math.sin(Date.now()*.0018)*.025;
+    }
+  }
+}
+
+const player = new BrooklynnPlayer();
+
+// ─── DRAWING MINIGAME ─────────────────────────────────────────────────────────
+// Five shapes to trace, one per stage
+const SHAPES = [
+  { name:'Star', gen:()=>{
+      const p=[];
+      for(let i=0;i<10;i++){ const a=i*Math.PI/5-Math.PI/2; const r=i%2===0?155:65;
+        p.push({x:240+r*Math.cos(a), y:228+r*Math.sin(a)}); }
+      return p;
+  }},
+  { name:'Heart', gen:()=>{
+      const p=[], cx=240, cy=205, s=8.5;
+      for(let i=0;i<30;i++){ const t=i/30*Math.PI*2;
+        const hx=16*Math.pow(Math.sin(t),3);
+        const hy=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t);
+        p.push({x:cx+hx*s, y:cy-hy*s}); }
+      return p;
+  }},
+  { name:'Triangle', gen:()=>{
+      const p=[];
+      for(let i=0;i<3;i++){ const a=-Math.PI/2+i*2*Math.PI/3;
+        p.push({x:240+165*Math.cos(a), y:235+165*Math.sin(a)}); }
+      return p;
+  }},
+  { name:'Diamond', gen:()=>{
+      const r=168;
+      return [{x:240,y:228-r},{x:240+r,y:228},{x:240,y:228+r},{x:240-r,y:228}];
+  }},
+  { name:'Flower', gen:()=>{
+      const p=[], cx=240, cy=228;
+      for(let i=0;i<60;i++){ const t=i/60*Math.PI*2; const r=100+55*Math.cos(6*t);
+        p.push({x:cx+r*Math.cos(t), y:cy+r*Math.sin(t)}); }
+      return p;
+  }},
+];
+
+let currentStage = 0;
+let SHAPE_PTS = [];
+let GHOST_SAMPLES = [];
+
+function buildShape(idx){
+  SHAPE_PTS = SHAPES[idx].gen();
+  GHOST_SAMPLES = [];
+  for(let i=0;i<SHAPE_PTS.length;i++){
+    const a=SHAPE_PTS[i], b=SHAPE_PTS[(i+1)%SHAPE_PTS.length];
+    const dx=b.x-a.x, dy=b.y-a.y;
+    const steps=Math.max(1,Math.floor(Math.sqrt(dx*dx+dy*dy)/3));
+    for(let s=0;s<steps;s++) GHOST_SAMPLES.push({x:a.x+dx*s/steps, y:a.y+dy*s/steps});
+  }
+}
+function setStage(i){ currentStage=i; buildShape(i); }
+buildShape(0);
+
+const THRESH    = 20;  // px radius for coverage
+const WIN_COV   = 0.80;
+
+let drawActive  = false;
+let isDrawing   = false;
+let currentStroke = null;
+const coveredSet  = new Set();
+let coverage    = 0;
+let drawWon     = false;
+let scratchN    = 0;
+
+const drawCv  = document.getElementById('draw-canvas');
+const drawCtx = drawCv.getContext('2d');
+
+// Offscreen canvas accumulates paint strokes permanently
+const offCv   = document.createElement('canvas');
+offCv.width   = 480; offCv.height = 480;
+const offCtx  = offCv.getContext('2d');
+
+function canvasPos(e){
+  const r=drawCv.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*(480/r.width), y:(e.clientY-r.top)*(480/r.height)};
+}
+
+function paintSegment(from,to){
+  offCtx.strokeStyle='#e91e63';
+  offCtx.lineWidth=16; offCtx.lineCap='round'; offCtx.lineJoin='round';
+  offCtx.shadowColor='#e91e63'; offCtx.shadowBlur=10;
+  offCtx.beginPath(); offCtx.moveTo(from.x,from.y); offCtx.lineTo(to.x,to.y); offCtx.stroke();
+  offCtx.shadowBlur=0;
+}
+
+function paintDot(p){
+  offCtx.fillStyle='#e91e63';
+  offCtx.shadowColor='#e91e63'; offCtx.shadowBlur=10;
+  offCtx.beginPath(); offCtx.arc(p.x,p.y,8,0,Math.PI*2); offCtx.fill();
+  offCtx.shadowBlur=0;
+}
+
+function addPoint(x,y){
+  if(!currentStroke) return;
+  const prev=currentStroke[currentStroke.length-1];
+  if(prev){
+    const dx=x-prev.x, dy=y-prev.y;
+    if(dx*dx+dy*dy<4) return;
+    paintSegment(prev,{x,y});
+    // Check coverage along full segment so fast strokes don't miss samples
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    const steps=Math.max(1,Math.ceil(dist/8));
+    for(let s=1;s<=steps;s++) incrCoverage(prev.x+dx*s/steps,prev.y+dy*s/steps);
+  } else {
+    paintDot({x,y});
+    incrCoverage(x,y);
+  }
+  currentStroke.push({x,y});
+  scratchN++;
+  if(scratchN%7===0) playScratch();
+}
+
+function incrCoverage(nx,ny){
+  let changed=false;
+  GHOST_SAMPLES.forEach((gp,i)=>{
+    if(coveredSet.has(i)) return;
+    const dx=nx-gp.x, dy=ny-gp.y;
+    if(dx*dx+dy*dy<THRESH*THRESH){ coveredSet.add(i); changed=true; }
+  });
+  if(!changed) return;
+  coverage=coveredSet.size/GHOST_SAMPLES.length;
+  const pct=Math.round(coverage*100);
+  document.getElementById('prog-fill').style.width=pct+'%';
+  document.getElementById('prog-label').textContent=pct+'%';
+  if(!drawWon && coverage>=WIN_COV){ drawWon=true; setTimeout(triggerWin,700); }
+}
+
+function clearDrawing(){
+  offCtx.clearRect(0,0,480,480);
+  currentStroke=null; isDrawing=false;
+  coveredSet.clear(); coverage=0; drawWon=false;
+  document.getElementById('prog-fill').style.width='0%';
+  document.getElementById('prog-label').textContent='0%';
+}
+
+function renderDrawCanvas(){
+  drawCtx.clearRect(0,0,480,480);
+
+  // Ghost star: dashed white outline with glow
+  drawCtx.save();
+  drawCtx.setLineDash([14,8]);
+  drawCtx.strokeStyle='rgba(255,255,255,.42)';
+  drawCtx.lineWidth=4; drawCtx.lineCap='round'; drawCtx.lineJoin='round';
+  drawCtx.shadowColor='rgba(255,255,255,.3)'; drawCtx.shadowBlur=10;
+  drawCtx.beginPath();
+  drawCtx.moveTo(SHAPE_PTS[0].x,SHAPE_PTS[0].y);
+  for(let i=1;i<SHAPE_PTS.length;i++) drawCtx.lineTo(SHAPE_PTS[i].x,SHAPE_PTS[i].y);
+  drawCtx.closePath(); drawCtx.stroke();
+  drawCtx.restore();
+
+  // User paint from offscreen
+  drawCtx.drawImage(offCv,0,0);
+
+  // Coverage highlight: re-stroke covered sections in semi-transparent pink
+  // (skipped for performance — progress bar is enough feedback)
+}
+
+// Mouse events on draw canvas
+drawCv.addEventListener('mousedown',e=>{
+  if(!drawActive||e.button!==0) return;
+  e.preventDefault(); isDrawing=true;
+  currentStroke=[];
+  audioCtx.resume();
+  const p=canvasPos(e); addPoint(p.x,p.y);
+});
+drawCv.addEventListener('mousemove',e=>{
+  if(!drawActive||!isDrawing) return;
+  const p=canvasPos(e); addPoint(p.x,p.y);
+});
+window.addEventListener('mouseup',e=>{ if(e.button===0){ isDrawing=false; currentStroke=null; } });
+
+document.getElementById('clear-btn').addEventListener('click',clearDrawing);
+
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+let levelActive=false, paintingActive=false;
+
+function distToEasel(){ return player.pos.distanceTo(EASEL_POS); }
+
+function startMinigame(){
+  if(paintingActive) return;
+  paintingActive=true;
+  drawActive=true;
+  player.startDrawing();
+  player.facing=Math.atan2(EASEL_POS.x-player.pos.x, EASEL_POS.z-player.pos.z);
+  clearDrawing(); drawWon=false;
+  document.getElementById('draw-title').textContent='✏️ Hold left-click and trace the '+SHAPES[currentStage].name.toLowerCase();
+  document.getElementById('approach-hint').style.display='none';
+  document.getElementById('draw-overlay').style.display='flex';
+  audioCtx.resume();
+}
+
+function stopMinigame(){
+  paintingActive=false; drawActive=false;
+  isDrawing=false;
+  player.stopDrawing();
+  document.getElementById('draw-overlay').style.display='none';
+}
+
+function saveStars(lvl,s){
+  const k='tuck_stars_'+lvl;
+  if(s>parseInt(localStorage.getItem(k)||'0')) localStorage.setItem(k,String(s));
+  if(window.Ach) Ach.check();
+  const el=document.getElementById('win-stars-earned');
+  if(el) el.textContent='★'.repeat(s)+'☆'.repeat(3-s);
+}
+function triggerWin(){
+  stopMinigame();
+  const pct=Math.round(coverage*100);
+  const name=SHAPES[currentStage].name.toLowerCase();
+  document.getElementById('win-cov').textContent='You traced '+pct+'% of the '+name+'!';
+  const last=currentStage>=SHAPES.length-1;
+  const nextBtn=document.getElementById('next-btn');
+  const winTitle=document.querySelector('.win-title');
+  if(last){
+    winTitle.textContent='🎨 MASTERPIECE!';
+    nextBtn.textContent='⌂ Menu'; nextBtn.dataset.action='menu';
+    saveStars(5, pct>=95?3:pct>=88?2:1);
+  }else{
+    winTitle.textContent=`🎨 SHAPE ${currentStage+1} DONE!`;
+    nextBtn.textContent='Next Shape →'; nextBtn.dataset.action='next';
+    document.getElementById('win-stars-earned').textContent=`Shape ${currentStage+1} / ${SHAPES.length}`;
+  }
+  document.getElementById('win').style.display='flex';
+  playWin();
+}
+
+function triggerFail(){
+  stopMinigame();
+  const pct=Math.round(coverage*100);
+  document.getElementById('fail-cov').textContent=
+    'You traced '+pct+'% — need '+Math.round(WIN_COV*100)+'% to finish the painting';
+  document.getElementById('fail').style.display='flex';
+}
+
+// "Done" — player can manually submit with Enter
+function trySubmit(){
+  if(!paintingActive) return;
+  if(coverage>=WIN_COV) triggerWin();
+  else triggerFail();
+}
+
+function resetLevel(){
+  document.getElementById('win').style.display='none';
+  document.getElementById('fail').style.display='none';
+  levelActive=true;
+  startMinigame();
+}
+
+// ─── CAMERA ───────────────────────────────────────────────────────────────────
+let camTheta=0, camPhi=.36;
+let rmbDown=false, lastMX=0, lastMY=0;
+const CAM_DIST=7.5;
+const camTarget=new THREE.Vector3(), camWant=new THREE.Vector3();
+
+canvas3d.addEventListener('contextmenu',e=>e.preventDefault());
+canvas3d.addEventListener('mousedown',e=>{ if(e.button===2){rmbDown=true;lastMX=e.clientX;lastMY=e.clientY;} });
+window.addEventListener('mouseup',e=>{ if(e.button===2) rmbDown=false; });
+window.addEventListener('mousemove',e=>{
+  if(!rmbDown) return;
+  camTheta-=(e.clientX-lastMX)*.005; camPhi-=(e.clientY-lastMY)*.005;
+  camPhi=Math.max(.05,Math.min(1.25,camPhi)); lastMX=e.clientX; lastMY=e.clientY;
+});
+
+function updateCamera(dt){
+  const px=player.pos.x, py=player.pos.y+1.1, pz=player.pos.z;
+  camWant.set(
+    px+Math.sin(camTheta)*Math.cos(camPhi)*CAM_DIST,
+    py+Math.sin(camPhi)*CAM_DIST,
+    pz+Math.cos(camTheta)*Math.cos(camPhi)*CAM_DIST
+  );
+  const a=1-Math.pow(.01,dt);
+  camera.position.lerp(camWant,a);
+  camTarget.lerp(new THREE.Vector3(px,py,pz),a);
+  camera.lookAt(camTarget);
+}
+
+// ─── INPUT ────────────────────────────────────────────────────────────────────
+const keys={forward:false,backward:false,left:false,right:false,sprint:false};
+let jumpQ=false;
+
+document.addEventListener('keydown',e=>{
+  if(paintingActive){
+    if(e.code==='Enter') trySubmit();
+    return;
+  }
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    keys.forward =true;  break;
+    case'KeyS':case'ArrowDown':  keys.backward=true;  break;
+    case'KeyA':case'ArrowLeft':  keys.left    =true;  break;
+    case'KeyD':case'ArrowRight': keys.right   =true;  break;
+    case'ShiftLeft':case'ShiftRight': keys.sprint=true; break;
+    case'Space': e.preventDefault(); if(player.onGround) jumpQ=true; break;
+    case'KeyE':
+      if(levelActive&&!paintingActive&&distToEasel()<2.2) startMinigame();
+      break;
+  }
+});
+document.addEventListener('keyup',e=>{
+  if(paintingActive) return;
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    keys.forward =false; break;
+    case'KeyS':case'ArrowDown':  keys.backward=false; break;
+    case'KeyA':case'ArrowLeft':  keys.left    =false; break;
+    case'KeyD':case'ArrowRight': keys.right   =false; break;
+    case'ShiftLeft':case'ShiftRight': keys.sprint=false; break;
+  }
+});
+
+// ─── INTRO / DOM ──────────────────────────────────────────────────────────────
+const introEl     = document.getElementById('intro');
+const approachEl  = document.getElementById('approach-hint');
+
+function startLevel(){
+  introEl.style.display='none';
+  levelActive=true;
+  audioCtx.resume();
+}
+
+document.getElementById('intro-btn').addEventListener('click',startLevel);
+document.getElementById('replay-btn').addEventListener('click',resetLevel);
+document.getElementById('retry-btn').addEventListener('click',resetLevel);
+document.getElementById('next-btn').addEventListener('click',()=>{
+  if(document.getElementById('next-btn').dataset.action==='next'){
+    setStage(currentStage+1);
+    resetLevel();
+  }else{
+    window.location.href='index.html';
+  }
+});
+document.getElementById('fail-menu-btn').addEventListener('click',()=>window.location.href='index.html');
+
+// ─── GAME LOOP ─────────────────────────────────────────────────────────────────
+let prev=performance.now();
+
+function tick(){
+  requestAnimationFrame(tick);
+  const now=performance.now(), dt=Math.min((now-prev)/1000,.05); prev=now;
+
+  if(levelActive){
+    const jmp=jumpQ; jumpQ=false;
+    player.update(dt,{...keys,jump:jmp},camTheta);
+
+    if(!paintingActive){
+      const near=distToEasel()<2.2;
+      approachEl.style.display=near?'block':'none';
+    }
+
+    glowRing.material.opacity=.28+.28*Math.sin(Date.now()*.003);
+  }
+
+  if(paintingActive) renderDrawCanvas();
+
+  updateCamera(dt);
+  renderer.render(scene,camera);
+}
+
+tick();
+
+// ── Mobile touch controls ──
+if(Mobile.ready){
+  Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.button({label:'PAINT',code:'KeyE'});
+  Mobile.touchDraw('draw-canvas');
+}
+</script>
+</body>
+</html>

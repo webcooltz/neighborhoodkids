@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soccer Yard – Dawson</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',Arial,sans-serif; }
+#c { display:block; width:100vw; height:100vh; }
+
+/* ── Power meter ── */
+#power-wrap {
+  position:fixed; bottom:50px; left:50%; transform:translateX(-50%);
+  display:none; flex-direction:column; align-items:center; gap:4px;
+}
+#power-label { color:#fff; font-size:13px; font-weight:bold; text-shadow:1px 1px 3px #000; letter-spacing:1px; }
+#power-bar   { width:220px; height:18px; background:rgba(0,0,0,.35);
+               border:2px solid rgba(255,255,255,.7); border-radius:10px; overflow:hidden; }
+#power-fill  { height:100%; width:0%;
+               background:linear-gradient(to right,#4caf50,#ffeb3b,#f44336); border-radius:8px; }
+
+/* ── Kick/speed HUD ── */
+#hud { position:fixed; top:14px; right:16px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
+.badge { background:rgba(0,0,0,.4); color:#fff; padding:5px 14px;
+         border-radius:20px; font-size:13px; font-weight:bold;
+         text-shadow:1px 1px 2px #000; border:1px solid rgba(255,255,255,.2); }
+
+/* ── Near-ball hint ── */
+#near  { position:fixed; bottom:88px; left:50%; transform:translateX(-50%);
+         color:#fff; font-size:13px; text-shadow:1px 1px 3px #000; display:none; }
+
+/* ── Controls legend ── */
+#instr { position:fixed; bottom:14px; left:14px;
+         color:rgba(255,255,255,.8); font-size:12px; line-height:1.75;
+         text-shadow:1px 1px 2px #000; }
+
+/* ── Ring progress bar ── */
+#ring-hud {
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  display:none; align-items:center; gap:6px;
+  background:rgba(0,0,0,.4); padding:8px 16px; border-radius:24px;
+  border:1px solid rgba(255,255,255,.2);
+}
+.ring-pip {
+  width:28px; height:28px; border-radius:50%; border:2.5px solid rgba(255,255,255,.5);
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:bold; color:#fff; text-shadow:1px 1px 2px #000;
+  transition:all .3s; background:rgba(0,0,0,.3);
+}
+.ring-pip.done { border-color:#4caf50; background:#4caf50; }
+.ring-pip.next { border-color:#ffeb3b; background:rgba(255,235,59,.25);
+                 box-shadow:0 0 8px #ffeb3b; }
+.ring-arr { color:rgba(255,255,255,.5); font-size:12px; }
+#goal-pip {
+  width:34px; height:34px; border-radius:50%; border:2.5px solid rgba(255,255,255,.4);
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; background:rgba(0,0,0,.3);
+  transition:all .3s;
+}
+#goal-pip.active { border-color:#fff59d; background:rgba(255,245,157,.25);
+                   box-shadow:0 0 10px #fff59d; }
+
+/* ── Level intro screen ── */
+#intro {
+  position:fixed; inset:0; background:rgba(10,20,10,.88);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; z-index:100;
+}
+.lvl-tag  { color:#aed581; font-size:13px; letter-spacing:4px; text-transform:uppercase; }
+.lvl-name { color:#fff; font-size:72px; font-weight:900; letter-spacing:6px;
+             text-shadow:0 4px 20px rgba(100,200,100,.5); line-height:1; }
+.lvl-desc { color:rgba(255,255,255,.75); font-size:15px; text-align:center; line-height:1.7;
+             max-width:340px; }
+.lvl-rings { display:flex; gap:8px; margin-top:4px; }
+.lvl-ring-chip {
+  padding:4px 12px; border-radius:20px; font-size:12px; font-weight:bold;
+  color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,.6);
+}
+#intro-btn {
+  margin-top:12px; padding:14px 48px; font-size:18px; font-weight:bold;
+  background:#4caf50; color:#fff; border:none; border-radius:30px;
+  cursor:pointer; letter-spacing:2px; text-transform:uppercase;
+  box-shadow:0 4px 16px rgba(76,175,80,.5);
+  transition:transform .1s, box-shadow .1s;
+}
+#intro-btn:hover { transform:scale(1.05); box-shadow:0 6px 22px rgba(76,175,80,.7); }
+
+/* ── Win screen ── */
+#win {
+  position:fixed; inset:0; background:rgba(10,20,10,.88);
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; z-index:100;
+}
+.win-emoji { font-size:72px; }
+.win-title { color:#fff; font-size:52px; font-weight:900; letter-spacing:4px; }
+.win-stat  { color:rgba(255,255,255,.8); font-size:16px; }
+.win-btns  { display:flex; gap:12px; margin-top:12px; }
+.win-btn {
+  padding:12px 32px; font-size:15px; font-weight:bold; border:none;
+  border-radius:24px; cursor:pointer; letter-spacing:1px;
+}
+.win-btn.primary   { background:#4caf50; color:#fff; }
+.win-btn.secondary { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.3); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- Level intro -->
+<div id="intro">
+  <div class="lvl-tag">Level 01</div>
+  <div class="lvl-name">DAWSON</div>
+  <div class="lvl-desc">Dribble through all 5 rings in order, then shoot the goal — across 5 stages!</div>
+  <div class="lvl-rings">
+    <span class="lvl-ring-chip" style="background:#c8a800">Standard</span>
+    <span class="lvl-ring-chip" style="background:#d84315">Low</span>
+    <span class="lvl-ring-chip" style="background:#6a1b9a">Narrow</span>
+    <span class="lvl-ring-chip" style="background:#00838f">Angled</span>
+    <span class="lvl-ring-chip" style="background:#ad1457">Moving</span>
+  </div>
+  <button id="intro-btn">PLAY</button>
+</div>
+
+<!-- Win screen -->
+<div id="win">
+  <div class="win-emoji">⚽</div>
+  <div class="win-title">GOAL!</div>
+  <div class="win-stat" id="win-time"></div>
+  <div class="win-stat" id="win-kicks"></div>
+  <div id="win-stars-earned" style="font-size:38px;color:#ffd54f;letter-spacing:8px;margin:6px 0"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="replay-btn">Play Again</button>
+    <button class="win-btn secondary" id="next-btn">Next Level →</button>
+    <button class="win-btn secondary" onclick="window.location.href='index.html'">⌂ Menu</button>
+  </div>
+</div>
+
+<!-- Ring progress HUD (shown during play) -->
+<div id="ring-hud">
+  <div class="ring-pip next" id="pip0">1</div>
+  <div class="ring-arr">›</div>
+  <div class="ring-pip" id="pip1">2</div>
+  <div class="ring-arr">›</div>
+  <div class="ring-pip" id="pip2">3</div>
+  <div class="ring-arr">›</div>
+  <div class="ring-pip" id="pip3">4</div>
+  <div class="ring-arr">›</div>
+  <div class="ring-pip" id="pip4">5</div>
+  <div class="ring-arr">›</div>
+  <div id="goal-pip">⚽</div>
+</div>
+
+<!-- Kick/speed HUD -->
+<div id="hud">
+  <div class="badge" id="kicks">Kicks: 0</div>
+  <div class="badge" id="spd">Speed: 0</div>
+</div>
+
+<div id="power-wrap">
+  <div id="power-label">KICK POWER</div>
+  <div id="power-bar"><div id="power-fill"></div></div>
+</div>
+
+<div id="near">Hold Click to charge, release to kick!</div>
+
+<div id="instr">
+  WASD – Move &nbsp;|&nbsp; Right-drag – Rotate camera<br>
+  Hold Left-Click – Charge kick, release to shoot &nbsp;|&nbsp; Shift – Sprint<br>
+  Space – Jump &nbsp;|&nbsp; R – Reset ball
+</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="mobile.js"></script>
+<script src="achievements.js"></script>
+<script>
+'use strict';
+
+// ─── BALL PHYSICS ─────────────────────────────────────────────────────────────
+class BallPhysics {
+  constructor() {
+    this.pos    = new THREE.Vector3(0, 0.23, 5);
+    this.vel    = new THREE.Vector3();
+    this.radius = 0.23;
+    this.onGround = false;
+  }
+  kick(dir, power) {
+    const h = 10 + power * 42, v = 2 + power * 9;
+    this.vel.set(dir.x * h, v, dir.z * h);
+  }
+  nudge(dir) { this.vel.x += dir.x * 4; this.vel.z += dir.z * 4; }
+  getSpeed()  { return this.vel.length(); }
+  reset() { this.pos.set(0, 0.23, 5); this.vel.set(0,0,0); }
+  update(dt) {
+    this.vel.y -= 20 * dt;
+    this.pos.addScaledVector(this.vel, dt);
+    this.onGround = false;
+    if (this.pos.y <= this.radius) {
+      this.pos.y = this.radius; this.onGround = true;
+      if (this.vel.y < -0.4) this.vel.y = -this.vel.y * 0.52; else this.vel.y = 0;
+      const f = Math.pow(0.80, dt * 60);
+      this.vel.x *= f; this.vel.z *= f;
+    }
+    const drag = Math.pow(0.997, dt * 60);
+    this.vel.x *= drag; this.vel.z *= drag;
+    const W = 9.55;
+    if (this.pos.x < -W) { this.pos.x = -W; if (this.vel.x < 0) this.vel.x *= -0.62; }
+    if (this.pos.x >  W) { this.pos.x =  W; if (this.vel.x > 0) this.vel.x *= -0.62; }
+    if (this.pos.z < -W) { this.pos.z = -W; if (this.vel.z < 0) this.vel.z *= -0.62; }
+    if (this.pos.z >  W) { this.pos.z =  W; if (this.vel.z > 0) this.vel.z *= -0.62; }
+    this._aabb(0, 2.1, -8, 3.5, 2.1, 2.5);
+    this._cylinder(6, -3, 0.42);
+    if (this.onGround) {
+      if (Math.abs(this.vel.x) < 0.04) this.vel.x = 0;
+      if (Math.abs(this.vel.z) < 0.04) this.vel.z = 0;
+    }
+  }
+  _aabb(cx,cy,cz,hx,hy,hz) {
+    const r=this.radius;
+    const cpx=Math.max(cx-hx,Math.min(this.pos.x,cx+hx));
+    const cpy=Math.max(cy-hy,Math.min(this.pos.y,cy+hy));
+    const cpz=Math.max(cz-hz,Math.min(this.pos.z,cz+hz));
+    const dx=this.pos.x-cpx,dy=this.pos.y-cpy,dz=this.pos.z-cpz;
+    const d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(d<r&&d>0.001){
+      const nx=dx/d,ny=dy/d,nz=dz/d;
+      this.pos.x=cpx+nx*r; this.pos.y=cpy+ny*r; this.pos.z=cpz+nz*r;
+      const vn=this.vel.x*nx+this.vel.y*ny+this.vel.z*nz;
+      if(vn<0){this.vel.x-=vn*nx*1.62;this.vel.y-=vn*ny*1.62;this.vel.z-=vn*nz*1.62;}
+    }
+  }
+  _cylinder(cx,cz,cr) {
+    if(this.pos.y>3.5)return;
+    const dx=this.pos.x-cx,dz=this.pos.z-cz,d2=Math.sqrt(dx*dx+dz*dz),min=cr+this.radius;
+    if(d2<min&&d2>0.001){
+      const nx=dx/d2,nz=dz/d2;
+      this.pos.x=cx+nx*min; this.pos.z=cz+nz*min;
+      const vn=this.vel.x*nx+this.vel.z*nz;
+      if(vn<0){this.vel.x-=vn*nx*1.62;this.vel.z-=vn*nz*1.62;}
+    }
+  }
+}
+
+// ─── PLAYER ───────────────────────────────────────────────────────────────────
+class Player {
+  constructor(scene) {
+    this.pos=new THREE.Vector3(0,0,4); this.vel=new THREE.Vector3();
+    this.facing=0; this.onGround=true; this.yVel=0;
+    this.walkPhase=0; this.isKicking=false; this.kickPhase=0; this.kickDur=0.38;
+    this.parts={}; this.group=new THREE.Group(); scene.add(this.group);
+    this._build();
+  }
+  _m(geo,mat,x,y,z){const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);return m;}
+  _build() {
+    const ML=THREE.MeshLambertMaterial,BG=THREE.BoxGeometry;
+    const skin=new ML({color:0xffccaa}),hair=new ML({color:0xc8961c}),
+          shirt=new ML({color:0x1565c0}),pants=new ML({color:0x283593}),
+          shoes=new ML({color:0x1a1a1a}),eye=new ML({color:0x1565c0}),
+          white=new ML({color:0xffffff});
+    this.parts.head=this._m(new BG(.52,.56,.52),skin,0,1.72,0);
+    this.parts.head.add(this._m(new BG(.54,.22,.54),hair,0,.19,0));
+    this.parts.head.add(this._m(new BG(.36,.16,.06),hair,0,.06,-.25));
+    for(const ex of[-.12,.12]) this.parts.head.add(this._m(new BG(.1,.08,.02),eye,ex,.06,.27));
+    this.parts.torso=this._m(new BG(.5,.6,.3),shirt,0,1.1,0);
+    this.parts.torso.add(this._m(new BG(.51,.08,.31),white,0,.06,0));
+    this.parts.lAP=new THREE.Group(); this.parts.lAP.position.set(-.34,1.37,0);
+    this.parts.lAP.add(this._m(new BG(.18,.48,.18),shirt,0,-.24,0));
+    this.parts.lAP.add(this._m(new BG(.16,.14,.16),skin,0,-.52,0));
+    this.parts.rAP=new THREE.Group(); this.parts.rAP.position.set(.34,1.37,0);
+    this.parts.rAP.add(this._m(new BG(.18,.48,.18),shirt,0,-.24,0));
+    this.parts.rAP.add(this._m(new BG(.16,.14,.16),skin,0,-.52,0));
+    this.parts.lLP=new THREE.Group(); this.parts.lLP.position.set(-.14,.8,0);
+    this.parts.lLP.add(this._m(new BG(.2,.5,.2),pants,0,-.25,0));
+    this.parts.lLP.add(this._m(new BG(.22,.12,.32),shoes,0,-.57,.05));
+    this.parts.rLP=new THREE.Group(); this.parts.rLP.position.set(.14,.8,0);
+    this.parts.rLP.add(this._m(new BG(.2,.5,.2),pants,0,-.25,0));
+    this.parts.rLP.add(this._m(new BG(.22,.12,.32),shoes,0,-.57,.05));
+    this.group.add(this.parts.head,this.parts.torso,
+      this.parts.lAP,this.parts.rAP,this.parts.lLP,this.parts.rLP);
+    this.group.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  }
+  update(dt,input,camTheta) {
+    const moving=input.forward||input.backward||input.left||input.right;
+    let mx=0,mz=0;
+    if(input.forward){mx-=Math.sin(camTheta);mz-=Math.cos(camTheta);}
+    if(input.backward){mx+=Math.sin(camTheta);mz+=Math.cos(camTheta);}
+    if(input.left){mx-=Math.cos(camTheta);mz+=Math.sin(camTheta);}
+    if(input.right){mx+=Math.cos(camTheta);mz-=Math.sin(camTheta);}
+    const len=Math.sqrt(mx*mx+mz*mz);
+    if(len>0){mx/=len;mz/=len;}
+    const spd=input.sprint?10:6;
+    this.vel.x=mx*spd; this.vel.z=mz*spd;
+    if(input.jump&&this.onGround){this.yVel=9;this.onGround=false;}
+    if(!this.onGround){
+      this.yVel-=22*dt; this.pos.y+=this.yVel*dt;
+      if(this.pos.y<=0){this.pos.y=0;this.onGround=true;this.yVel=0;}
+    }
+    this.pos.x+=this.vel.x*dt; this.pos.z+=this.vel.z*dt;
+    this.pos.x=Math.max(-9.3,Math.min(9.3,this.pos.x));
+    this.pos.z=Math.max(-9.3,Math.min(9.3,this.pos.z));
+    this._colHouse();
+    if(len>0.01){
+      const tgt=Math.atan2(mx,mz);
+      let d=tgt-this.facing;
+      while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2;
+      this.facing+=d*Math.min(1,dt*12);
+    }
+    this.group.position.copy(this.pos);
+    this.group.rotation.y=this.facing;
+    this._anim(dt,moving,input.sprint);
+  }
+  _anim(dt,moving,sprint) {
+    if(moving)this.walkPhase+=dt*(sprint?9:6); else this.walkPhase*=.88;
+    const sw=Math.sin(this.walkPhase)*(moving?.65:0);
+    if(this.isKicking){
+      this.kickPhase+=dt/this.kickDur;
+      const t=this.kickPhase;
+      if(t<.4)this.parts.rLP.rotation.x=-.5*(t/.4);
+      else if(t<.8)this.parts.rLP.rotation.x=-.5+1.4*((t-.4)/.4);
+      else if(t<1)this.parts.rLP.rotation.x=.9*(1-(t-.8)/.2);
+      else{this.isKicking=false;this.kickPhase=0;this.parts.rLP.rotation.x=0;}
+      this.parts.lAP.rotation.x=.55; this.parts.rAP.rotation.x=-.3;
+    }else{
+      this.parts.lLP.rotation.x=sw; this.parts.rLP.rotation.x=-sw;
+      this.parts.lAP.rotation.x=-sw*.5; this.parts.rAP.rotation.x=sw*.5;
+    }
+    if(!this.onGround){this.parts.lLP.rotation.x=.35;this.parts.rLP.rotation.x=.35;}
+    if(!moving&&!this.isKicking&&this.onGround)
+      this.parts.head.position.y=1.72+Math.sin(Date.now()*.0018)*.025;
+  }
+  _colHouse(){
+    const r=0.35;
+    const xMin=-3.5-r,xMax=3.5+r,zMax=-5.5+r;
+    if(this.pos.x>xMin&&this.pos.x<xMax&&this.pos.z<zMax&&this.pos.z>-9.3){
+      const dz=zMax-this.pos.z,dx1=this.pos.x-xMin,dx2=xMax-this.pos.x;
+      const m=Math.min(dx1,dx2,dz);
+      if(m===dz) this.pos.z=zMax;
+      else if(m===dx1) this.pos.x=xMin;
+      else this.pos.x=xMax;
+    }
+  }
+  triggerKick(){if(!this.isKicking){this.isKicking=true;this.kickPhase=0;}}
+  getFacingDir(){return new THREE.Vector3(Math.sin(this.facing),0,Math.cos(this.facing));}
+}
+
+// ─── WORLD ────────────────────────────────────────────────────────────────────
+class World {
+  constructor(scene){
+    this.scene=scene; this.clouds=[];
+    this._lights();this._sky();this._ground();this._sidewalk();
+    this._house();this._tree();this._fence();this._clouds();this._deco();
+  }
+  _lights(){
+    this.scene.add(new THREE.AmbientLight(0xfff0dd,.55));
+    const sun=new THREE.DirectionalLight(0xfff8e1,1.3);
+    sun.position.set(12,25,15);sun.castShadow=true;
+    sun.shadow.mapSize.set(2048,2048);
+    const sc=sun.shadow.camera;
+    sc.left=-22;sc.right=22;sc.top=22;sc.bottom=-22;sc.near=.5;sc.far=80;
+    sun.shadow.bias=-.001; this.scene.add(sun);
+    const fill=new THREE.DirectionalLight(0xaaccff,.3);
+    fill.position.set(-8,5,-8);this.scene.add(fill);
+  }
+  _sky(){this.scene.background=new THREE.Color(0x87ceeb);this.scene.fog=new THREE.FogExp2(0xaedaff,.018);}
+  _ground(){
+    const geo=new THREE.PlaneGeometry(40,40,16,16);
+    const pos=geo.attributes.position;
+    for(let i=0;i<pos.count;i++)pos.setZ(i,pos.getZ(i)+(Math.random()-.5)*.04);
+    geo.computeVertexNormals();
+    const mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0x5cb85c}));
+    mesh.rotation.x=-Math.PI/2;mesh.receiveShadow=true;this.scene.add(mesh);
+  }
+  _sidewalk(){
+    const mat=new THREE.MeshLambertMaterial({color:0xc0bfbc});
+    const path=new THREE.Mesh(new THREE.BoxGeometry(1.8,.08,13),mat);
+    path.position.set(0,.04,1.5);path.receiveShadow=true;this.scene.add(path);
+    const step=new THREE.Mesh(new THREE.BoxGeometry(2.6,.12,1.2),mat);
+    step.position.set(0,.06,-4.9);step.receiveShadow=true;this.scene.add(step);
+  }
+  _house(){
+    const g=new THREE.Group();
+    const red=new THREE.MeshLambertMaterial({color:0xe53935});
+    const white=new THREE.MeshLambertMaterial({color:0xf5f5f5});
+    const roof=new THREE.MeshLambertMaterial({color:0x5d1a1a});
+    const dark=new THREE.MeshLambertMaterial({color:0x8d6e63});
+    const door=new THREE.MeshLambertMaterial({color:0x4e342e});
+    const glass=new THREE.MeshLambertMaterial({color:0x81d4fa,transparent:true,opacity:.75});
+    const body=new THREE.Mesh(new THREE.BoxGeometry(7,4.2,5),red);
+    body.position.y=2.1;body.castShadow=true;body.receiveShadow=true;g.add(body);
+    for(const y of[.05,4.15]){const t=new THREE.Mesh(new THREE.BoxGeometry(7.1,.18,5.1),white);t.position.y=y;g.add(t);}
+    const rm=new THREE.Mesh(new THREE.ConeGeometry(5.2,2.8,4),roof);
+    rm.position.y=5.6;rm.rotation.y=Math.PI/4;rm.castShadow=true;g.add(rm);
+    const chim=new THREE.Mesh(new THREE.BoxGeometry(.85,1.8,.85),dark);
+    chim.position.set(2.2,6.1,-.6);chim.castShadow=true;g.add(chim);
+    const dfrm=new THREE.Mesh(new THREE.BoxGeometry(1.55,2.55,.12),white);
+    dfrm.position.set(0,1.27,2.57);g.add(dfrm);
+    const dm=new THREE.Mesh(new THREE.BoxGeometry(1.2,2.2,.12),door);
+    dm.position.set(0,1.1,2.62);g.add(dm);
+    const knob=new THREE.Mesh(new THREE.SphereGeometry(.07,6,4),white);
+    knob.position.set(.44,1.1,2.7);g.add(knob);
+    for(const wx of[-2.3,2.3]){
+      const wf=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.5,.12),white);wf.position.set(wx,2.6,2.57);g.add(wf);
+      const wg=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.1,.12),glass);wg.position.set(wx,2.6,2.62);g.add(wg);
+      const dh=new THREE.Mesh(new THREE.BoxGeometry(1.15,.06,.06),white);dh.position.set(wx,2.6,2.66);g.add(dh);
+      const dv=new THREE.Mesh(new THREE.BoxGeometry(.06,1.15,.06),white);dv.position.set(wx,2.6,2.66);g.add(dv);
+    }
+    for(const sx of[-3.52,3.52]){
+      const wf=new THREE.Mesh(new THREE.BoxGeometry(.12,1.3,1.3),white);wf.position.set(sx,2.6,0);g.add(wf);
+      const wg=new THREE.Mesh(new THREE.BoxGeometry(.12,1.0,1.0),glass);
+      wg.position.set(sx+(sx>0?-.02:.02),2.6,0);g.add(wg);
+    }
+    g.position.set(0,0,-8);this.scene.add(g);
+  }
+  _tree(){
+    const g=new THREE.Group();
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.28,.40,3.2,7),new THREE.MeshLambertMaterial({color:0x6d4c41}));
+    trunk.position.y=1.6;trunk.castShadow=true;g.add(trunk);
+    const lm=new THREE.MeshLambertMaterial({color:0x43a047});
+    const lmd=new THREE.MeshLambertMaterial({color:0x2e7d32});
+    [[0,5,0,2.4,lm],[1.4,4.4,.9,1.7,lmd],[-1.2,4.2,-.7,1.6,lm],
+     [.6,5.7,-1,1.5,lmd],[-.9,5.5,.8,1.4,lm],[0,6.3,.2,1.2,lmd]].forEach(([x,y,z,r,mat])=>{
+      const l=new THREE.Mesh(new THREE.SphereGeometry(r,5,4),mat);l.position.set(x,y,z);l.castShadow=true;g.add(l);
+    });
+    g.position.set(6,0,-3);this.scene.add(g);
+  }
+  _fence(){
+    const postMat=new THREE.MeshLambertMaterial({color:0x9e9e9e});
+    const railMat=new THREE.MeshLambertMaterial({color:0x757575});
+    const wireMat=new THREE.MeshLambertMaterial({color:0x9e9e9e,transparent:true,opacity:.45,side:THREE.DoubleSide});
+    const Y=10,PH=1.6,PS=2;
+    [{ax:'z',fixed:-Y},{ax:'z',fixed:Y},{ax:'x',fixed:-Y},{ax:'x',fixed:Y}].forEach(({ax,fixed})=>{
+      for(let t=-Y;t<=Y;t+=PS){
+        const post=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,PH,6),postMat);
+        post.position.set(ax==='z'?t:fixed,PH/2,ax==='x'?t:fixed);
+        post.castShadow=true;this.scene.add(post);
+      }
+      for(const ry of[.35,1.25]){
+        const rg=ax==='z'?new THREE.BoxGeometry(Y*2,.04,.04):new THREE.BoxGeometry(.04,.04,Y*2);
+        const rail=new THREE.Mesh(rg,railMat);
+        rail.position.set(ax==='x'?fixed:0,ry,ax==='z'?fixed:0);this.scene.add(rail);
+      }
+      const wg=ax==='z'?new THREE.PlaneGeometry(Y*2,PH):new THREE.PlaneGeometry(PH,Y*2);
+      const wm=new THREE.Mesh(wg,wireMat);
+      wm.position.set(ax==='x'?fixed:0,PH/2,ax==='z'?fixed:0);
+      if(ax==='x')wm.rotation.y=Math.PI/2;this.scene.add(wm);
+    });
+  }
+  _clouds(){
+    const mat=new THREE.MeshLambertMaterial({color:0xffffff});
+    for(let i=0;i<7;i++){
+      const cg=new THREE.Group();
+      const n=3+Math.floor(Math.random()*3);
+      for(let j=0;j<n;j++){
+        const r=.7+Math.random()*.9;
+        const puff=new THREE.Mesh(new THREE.SphereGeometry(r,5,4),mat);
+        puff.position.set((j-n/2)*1.3+(Math.random()-.5)*.5,(Math.random()-.5)*.35,(Math.random()-.5)*.5);
+        cg.add(puff);
+      }
+      cg.position.set((Math.random()-.5)*50,18+Math.random()*6,(Math.random()-.5)*50);
+      cg.userData.spd=(Math.random()>.5?1:-1)*(.3+Math.random()*.6);
+      this.scene.add(cg);this.clouds.push(cg);
+    }
+  }
+  _deco(){
+    const poleMat=new THREE.MeshLambertMaterial({color:0x616161});
+    const boxMat=new THREE.MeshLambertMaterial({color:0x1565c0});
+    const mg=new THREE.Group();
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1,6),poleMat);
+    pole.position.set(0,.5,0);mg.add(pole);
+    const mb=new THREE.Mesh(new THREE.BoxGeometry(.45,.32,.6),boxMat);
+    mb.position.y=1.16;mb.castShadow=true;mg.add(mb);
+    const lid=new THREE.Mesh(new THREE.CylinderGeometry(.165,.165,.6,8,1,false,0,Math.PI),boxMat);
+    lid.rotation.z=Math.PI/2;lid.rotation.y=Math.PI/2;lid.position.y=1.32;mg.add(lid);
+    mg.position.set(-3,0,9.2);this.scene.add(mg);
+    const stemMat=new THREE.MeshLambertMaterial({color:0x558b2f});
+    const pColors=[0xf44336,0xffeb3b,0xe91e63,0xff9800,0x9c27b0];
+    [[-7,3],[-8,-1],[-6,-5],[7,2],[8,-4],[4,7],[-3,-6]].forEach(([fx,fz],i)=>{
+      const fg=new THREE.Group();
+      const stem=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.4,5),stemMat);
+      stem.position.y=.2;fg.add(stem);
+      const petal=new THREE.Mesh(new THREE.SphereGeometry(.13,5,4),new THREE.MeshLambertMaterial({color:pColors[i%pColors.length]}));
+      petal.position.y=.46;fg.add(petal);
+      fg.position.set(fx,0,fz);this.scene.add(fg);
+    });
+  }
+  update(dt){
+    this.clouds.forEach(c=>{
+      c.position.x+=c.userData.spd*dt;
+      if(c.position.x>28)c.position.x=-28;
+      if(c.position.x<-28)c.position.x=28;
+    });
+  }
+}
+
+// ─── RING ─────────────────────────────────────────────────────────────────────
+// Types: 'standard' | 'low' | 'narrow' | 'angled' | 'moving'
+class Ring {
+  constructor(scene, id, type, cx, cy, cz, nx, ny, nz, radius, color) {
+    this.id       = id;
+    this.type     = type;
+    this.basePos  = new THREE.Vector3(cx, cy, cz);
+    this.center   = new THREE.Vector3(cx, cy, cz);
+    this.normal   = new THREE.Vector3(nx, ny, nz).normalize();
+    this.radius   = radius;
+    this.completed = false;
+    this.group    = new THREE.Group();
+    this._prevDot  = null;
+
+    const tubeR = type === 'narrow' ? 0.07 : 0.11;
+    this.mat = new THREE.MeshLambertMaterial({
+      color, emissive: color, emissiveIntensity: 0.25
+    });
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(radius, tubeR, 14, 40), this.mat);
+    torus.castShadow = true;
+
+    // Align torus hole direction (+Z by default in Three.js) with our normal
+    const q = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, 1), this.normal
+    );
+    torus.quaternion.copy(q);
+
+    // Extra visual tilt for 'angled' type (rotates around normal axis)
+    if (type === 'angled') {
+      const tiltQ = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(1, 0, 0), Math.PI * 0.22
+      );
+      torus.quaternion.premultiply(tiltQ);
+    }
+    this.group.add(torus);
+
+    // Number badge floating above ring center
+    const badgeMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const badge = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 4), badgeMat);
+    badge.position.y = radius + 0.35;
+    this.group.add(badge);
+
+    this.group.position.copy(this.basePos);
+    scene.add(this.group);
+  }
+
+  // Returns true when ball passes through in the correct direction
+  checkPass(prevBall, currBall) {
+    if (this.completed) return false;
+    const d0 = prevBall.clone().sub(this.center).dot(this.normal);
+    const d1 = currBall.clone().sub(this.center).dot(this.normal);
+    // Crossed from negative to positive side
+    if (d0 <= 0 && d1 > 0) {
+      const t   = d0 / (d0 - d1);
+      const cross = prevBall.clone().lerp(currBall, t);
+      const toC  = cross.clone().sub(this.center);
+      const along = toC.dot(this.normal);
+      toC.addScaledVector(this.normal, -along);  // project onto ring plane
+      if (toC.length() < this.radius - 0.08) return true;
+    }
+    return false;
+  }
+
+  markDone() {
+    this.completed = true;
+    this.mat.color.set(0x4caf50);
+    this.mat.emissive.set(0x4caf50);
+    this.mat.emissiveIntensity = 0.5;
+  }
+
+  pulse(t) {
+    if (this.completed) return;
+    const p = Math.abs(Math.sin(t * 3));
+    this.mat.emissiveIntensity = p * 0.95;
+    this.group.scale.setScalar(1 + p * 0.07);
+  }
+
+  update(t) {
+    if (this.type === 'moving') {
+      const offset = Math.sin(t * 1.6) * 2.2;
+      this.center.x = this.basePos.x + offset;
+      this.group.position.x = this.center.x;
+    }
+  }
+}
+
+// ─── GOAL ─────────────────────────────────────────────────────────────────────
+class Goal {
+  constructor(scene) {
+    // Portable goal on the LEFT side of yard, mouth faces RIGHT (east/+x)
+    // Goal mouth plane at x = -7.5
+    // z range: -8 to -5  (width 3 m)
+    // y range:  0 to 2.2 (height 2.2 m)
+    this.mouthX   = -7.5;
+    this.zMin     =  5.5;
+    this.zMax     =  8.5;
+    this.height   = 2.2;
+    this.active   = false;
+    this.scored   = false;
+    this.group    = new THREE.Group();
+
+    this._build(scene);
+  }
+
+  _build(scene) {
+    const postMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const netMat  = new THREE.MeshLambertMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.35,
+      side: THREE.DoubleSide, wireframe: false
+    });
+    const netLineMat = new THREE.MeshLambertMaterial({
+      color: 0xddeeff, transparent: true, opacity: 0.55
+    });
+
+    const pR = 0.06; // post radius
+
+    // Helper: cylinder between two points
+    const cylinder = (x1,y1,z1,x2,y2,z2,r,mat) => {
+      const dir   = new THREE.Vector3(x2-x1,y2-y1,z2-z1);
+      const len   = dir.length();
+      const mid   = new THREE.Vector3((x1+x2)/2,(y1+y2)/2,(z1+z2)/2);
+      const mesh  = new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,8), mat);
+      mesh.position.copy(mid);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+      mesh.castShadow = true;
+      return mesh;
+    };
+
+    const mx = this.mouthX, zl = this.zMin, zr = this.zMax, h = this.height;
+    const depth = 2.0;  // goal depth (net goes back -x direction)
+    const bx    = mx - depth;
+
+    // Front frame (mouth)
+    this.group.add(cylinder(mx,0,zl, mx,h,zl, pR,postMat)); // left post
+    this.group.add(cylinder(mx,0,zr, mx,h,zr, pR,postMat)); // right post
+    this.group.add(cylinder(mx,h,zl, mx,h,zr, pR,postMat)); // crossbar
+
+    // Back frame
+    this.group.add(cylinder(bx,0,zl, bx,h,zl, pR*0.7,postMat));
+    this.group.add(cylinder(bx,0,zr, bx,h,zr, pR*0.7,postMat));
+    this.group.add(cylinder(bx,h,zl, bx,h,zr, pR*0.7,postMat));
+
+    // Side & top connecting bars
+    this.group.add(cylinder(mx,h,zl, bx,h,zl, pR*0.7,postMat)); // top left
+    this.group.add(cylinder(mx,h,zr, bx,h,zr, pR*0.7,postMat)); // top right
+    this.group.add(cylinder(mx,0,zl, bx,0,zl, pR*0.7,postMat)); // bottom left
+    this.group.add(cylinder(mx,0,zr, bx,0,zr, pR*0.7,postMat)); // bottom right
+
+    // Net planes (back, top, sides)
+    const netPlanes = [
+      { w: depth, h: this.height, pos:[bx+depth/2, h/2, zl], rx:0, ry:Math.PI/2 },
+      // Back
+      { w: zr-zl, h: this.height, pos:[bx, h/2, (zl+zr)/2], rx:0, ry:0 },
+      // Top
+      { w: depth, h: zr-zl, pos:[bx+depth/2, h, (zl+zr)/2], rx:Math.PI/2, ry:0 },
+    ];
+    netPlanes.forEach(({w,h,pos,rx,ry})=>{
+      const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h,Math.round(w/.4),Math.round(h/.4)),netLineMat);
+      mesh.position.set(...pos); mesh.rotation.x=rx; mesh.rotation.y=ry;
+      this.group.add(mesh);
+    });
+    // Left side net
+    const lSide=new THREE.Mesh(new THREE.PlaneGeometry(depth,this.height,5,5),netLineMat);
+    lSide.position.set(bx+depth/2,h/2,zl);lSide.rotation.y=Math.PI/2;this.group.add(lSide);
+    // Right side net
+    const rSide=new THREE.Mesh(new THREE.PlaneGeometry(depth,this.height,5,5),netLineMat);
+    rSide.position.set(bx+depth/2,h/2,zr);rSide.rotation.y=Math.PI/2;this.group.add(rSide);
+
+    // Ground line indicator
+    const lineMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent:true, opacity:.6 });
+    const line = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, zr-zl), lineMat);
+    line.position.set(mx, 0.01, (zl+zr)/2);
+    this.group.add(line);
+
+    // Initially dim until activated
+    this.group.traverse(o=>{ if(o.isMesh) o.material = o.material.clone(); });
+    this._setOpacity(0.35);
+
+    scene.add(this.group);
+  }
+
+  _setOpacity(v) {
+    this.group.traverse(o=>{
+      if(o.isMesh&&o.material.transparent) o.material.opacity = v;
+    });
+  }
+
+  activate() {
+    this.active = true;
+    this._setOpacity(1.0);
+    // Tint posts gold
+    this.group.traverse(o=>{
+      if(o.isMesh&&!o.material.wireframe&&o.material.color){
+        o.material = o.material.clone();
+        if(o.material.opacity > 0.9) o.material.color.set(0xfff176);
+      }
+    });
+  }
+
+  // Call each frame with prev and current ball positions
+  check(prev, curr) {
+    if (!this.active || this.scored) return false;
+    // Ball crosses x = mouthX heading left (decreasing x)
+    if (prev.x >= this.mouthX && curr.x < this.mouthX) {
+      if (curr.z > this.zMin && curr.z < this.zMax && curr.y < this.height && curr.y > 0) {
+        this.scored = true;
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+// ─── AUDIO ────────────────────────────────────────────────────────────────────
+const audioCtx  = new (window.AudioContext||window.webkitAudioContext)();
+let birdsOn = false;
+
+function snd_kick(power){
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.connect(g);g.connect(audioCtx.destination);o.type='sawtooth';
+  const t=audioCtx.currentTime;
+  o.frequency.setValueAtTime(70+power*60,t);
+  o.frequency.exponentialRampToValueAtTime(35,t+.2);
+  g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.25);
+  o.start(t);o.stop(t+.25);
+}
+
+function snd_ring(){
+  for(let i=0;i<3;i++){
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);o.type='sine';
+    const t=audioCtx.currentTime+i*.08;
+    const freq=[880,1100,1320][i];
+    o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.25);
+    o.start(t);o.stop(t+.3);
+  }
+}
+
+function snd_goal(){
+  const notes=[523,659,784,1047];
+  notes.forEach((freq,i)=>{
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);o.type='triangle';
+    const t=audioCtx.currentTime+i*.12;
+    o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(.3,t);g.gain.exponentialRampToValueAtTime(.001,t+.4);
+    o.start(t);o.stop(t+.5);
+  });
+}
+
+let rollT=0;
+function snd_roll(spd){
+  rollT-=1/60; if(rollT>0||spd<1.5)return; rollT=.12;
+  const buf=audioCtx.createBuffer(1,512,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);for(let i=0;i<512;i++)d[i]=(Math.random()*2-1);
+  const src=audioCtx.createBufferSource(),g=audioCtx.createGain();
+  src.buffer=buf;src.connect(g);g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime,vol=Math.min(1,spd/8)*.06;
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+.12);
+  src.start(t);src.stop(t+.12);
+}
+
+function startBirds(){
+  if(birdsOn)return;birdsOn=true;
+  const chirp=()=>{
+    const now=audioCtx.currentTime,freq=700+Math.random()*500;
+    const reps=1+Math.floor(Math.random()*3);
+    for(let i=0;i<reps;i++){
+      const t=now+i*.14;
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.connect(g);g.connect(audioCtx.destination);o.type='sine';
+      o.frequency.setValueAtTime(freq+i*80,t);
+      o.frequency.linearRampToValueAtTime(freq+i*80+180,t+.06);
+      o.frequency.linearRampToValueAtTime(freq+i*80,t+.12);
+      g.gain.setValueAtTime(.065,t);g.gain.exponentialRampToValueAtTime(.001,t+.14);
+      o.start(t);o.stop(t+.15);
+    }
+    setTimeout(chirp,2200+Math.random()*4000);
+  };
+  setTimeout(chirp,600);
+}
+
+// ─── SCENE SETUP ──────────────────────────────────────────────────────────────
+const canvas   = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,200);
+camera.position.set(0,5,12);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+const world  = new World(scene);
+const player = new Player(scene);
+const bphys  = new BallPhysics();
+const ringLight = new THREE.PointLight(0xffee44, 0, 7);
+scene.add(ringLight);
+
+// Ball mesh
+const ballMesh=(()=>{
+  const g=new THREE.Group();
+  const white=new THREE.MeshLambertMaterial({color:0xfafafa});
+  const black=new THREE.MeshLambertMaterial({color:0x222222});
+  const sphere=new THREE.Mesh(new THREE.SphereGeometry(.23,10,8),white);
+  sphere.castShadow=true;g.add(sphere);
+  [[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],
+   [.7,.7,0],[-.7,.7,0],[.7,-.7,0],[-.7,-.7,0]].forEach(([nx,ny,nz])=>{
+    const patch=new THREE.Mesh(new THREE.CircleGeometry(.23*.38,5),black);
+    const dir=new THREE.Vector3(nx,ny,nz).normalize();
+    patch.position.copy(dir.clone().multiplyScalar(.23*1.01));
+    patch.lookAt(dir.clone().multiplyScalar(2));sphere.add(patch);
+  });
+  scene.add(g);return g;
+})();
+const ballQuat=new THREE.Quaternion();
+
+// ─── LEVEL: DAWSON ────────────────────────────────────────────────────────────
+// Ring layout – wide U-curve across yard, all ground-level, all face forward (0,0,-1)
+// Path: start(0,4) → right-front(8,1.5) → far-right(8.5,-4.5) → back-right(4.5,-7.5) → back-left(-6,-6.5) → left(-6.5,-0.5) → goal(-7.5)
+//
+//   type        cx   cy    cz  nx ny nz  r     color
+const LEVELS = [
+  // Stage 1 – wide sweep
+  [
+    ['standard',  8.0, 0.45,  1.5,  0,0,-1, 1.10, 0xf9a825],
+    ['low',       8.5, 0.32, -4.5,  0,0,-1, 0.80, 0xe64a19],
+    ['narrow',    5.0, 0.40,  4.0,  0,0,-1, 0.68, 0x7b1fa2],
+    ['angled',   -3.5, 0.40,  5.5,  0,0,-1, 0.95, 0x00838f],
+    ['moving',   -6.5, 0.40, -0.5,  0,0,-1, 1.00, 0xc2185b],
+  ],
+  // Stage 2 – zigzag
+  [
+    ['standard', -7.0, 0.45,  3.0,  0,0,-1, 1.05, 0xf9a825],
+    ['narrow',   -2.0, 0.40, -2.0,  0,0,-1, 0.66, 0x7b1fa2],
+    ['low',       6.0, 0.32,  1.0,  0,0,-1, 0.78, 0xe64a19],
+    ['angled',    3.0, 0.40,  6.0,  0,0,-1, 0.95, 0x00838f],
+    ['moving',   -4.0, 0.40,  6.5,  0,0,-1, 1.00, 0xc2185b],
+  ],
+  // Stage 3 – big loop
+  [
+    ['standard',  7.5, 0.45,  6.0,  0,0,-1, 1.05, 0xf9a825],
+    ['low',       8.5, 0.32, -1.0,  0,0,-1, 0.78, 0xe64a19],
+    ['angled',    0.0, 0.40, -3.0,  0,0,-1, 0.95, 0x00838f],
+    ['narrow',   -7.0, 0.40, -2.0,  0,0,-1, 0.64, 0x7b1fa2],
+    ['moving',   -5.0, 0.40,  4.5,  0,0,-1, 1.00, 0xc2185b],
+  ],
+  // Stage 4 – tight center weave
+  [
+    ['low',       0.0, 0.32,  7.0,  0,0,-1, 0.78, 0xe64a19],
+    ['standard',  6.5, 0.45,  3.5,  0,0,-1, 1.00, 0xf9a825],
+    ['narrow',    0.5, 0.40,  0.0,  0,0,-1, 0.62, 0x7b1fa2],
+    ['angled',   -6.5, 0.40,  2.0,  0,0,-1, 0.92, 0x00838f],
+    ['moving',   -3.0, 0.40, -3.5,  0,0,-1, 0.95, 0xc2185b],
+  ],
+  // Stage 5 – pro course
+  [
+    ['narrow',    8.0, 0.40,  4.0,  0,0,-1, 0.60, 0x7b1fa2],
+    ['angled',    4.0, 0.40, -2.0,  0,0,-1, 0.82, 0x00838f],
+    ['moving',    0.0, 0.40,  2.0,  0,0,-1, 0.92, 0xc2185b],
+    ['low',      -5.0, 0.30, -1.0,  0,0,-1, 0.70, 0xe64a19],
+    ['narrow',   -7.5, 0.40,  3.5,  0,0,-1, 0.58, 0x9c27b0],
+  ],
+];
+
+let currentLevel = 0;
+let curDefs = LEVELS[0];
+let rings = [];
+function buildRings(idx){
+  rings.forEach(r=>scene.remove(r.group));
+  curDefs = LEVELS[idx];
+  rings = curDefs.map(([type,cx,cy,cz,nx,ny,nz,r,color],i)=>
+    new Ring(scene,i,type,cx,cy,cz,nx,ny,nz,r,color)
+  );
+}
+buildRings(0);
+
+const goal = new Goal(scene);
+
+// ─── LEVEL STATE ──────────────────────────────────────────────────────────────
+let nextRing    = 0;
+let levelActive = false;
+let levelStartT = 0;
+let levelTime   = 0;
+let totalKicks  = 0;
+let dribbling   = false; // ball follows player until kicked
+
+const pips      = [0,1,2,3,4].map(i=>document.getElementById('pip'+i));
+const goalPip   = document.getElementById('goal-pip');
+const ringHud   = document.getElementById('ring-hud');
+const winScreen = document.getElementById('win');
+const introEl   = document.getElementById('intro');
+
+function updateRingHud() {
+  pips.forEach((p,i)=>{
+    p.className='ring-pip';
+    if(i<nextRing)      p.classList.add('done');
+    else if(i===nextRing)p.classList.add('next');
+  });
+  if(nextRing>=5) goalPip.classList.add('active');
+}
+
+function startLevel() {
+  introEl.style.display='none';
+  ringHud.style.display='flex';
+  levelActive=true;
+  levelStartT=performance.now();
+  nextRing=0;
+  totalKicks=0;
+  dribbling=true;
+  bphys.reset();
+  player.pos.set(0,0,4);
+  updateRingHud();
+  audioCtx.resume().then(startBirds);
+}
+
+function saveStars(lvl,s){
+  const k='tuck_stars_'+lvl;
+  if(s>parseInt(localStorage.getItem(k)||'0')) localStorage.setItem(k,String(s));
+  if(window.Ach) Ach.check();
+  const el=document.getElementById('win-stars-earned');
+  if(el) el.textContent='★'.repeat(s)+'☆'.repeat(3-s);
+}
+function winLevel() {
+  levelActive=false;
+  ringLight.intensity=0;
+  const secs=((performance.now()-levelStartT)/1000).toFixed(1);
+  document.getElementById('win-time').textContent  = `Time: ${secs}s`;
+  document.getElementById('win-kicks').textContent = `Kicks: ${totalKicks}`;
+  const t=parseFloat(secs);
+  const last=currentLevel>=LEVELS.length-1;
+  const nextBtn=document.getElementById('next-btn');
+  const starsEl=document.getElementById('win-stars-earned');
+  if(last){
+    document.querySelector('.win-title').textContent='ALL CLEAR!';
+    nextBtn.textContent='Next Level →';
+    saveStars(1, t<=18?3:t<=30?2:1);
+  }else{
+    document.querySelector('.win-title').textContent=`STAGE ${currentLevel+1} DONE!`;
+    nextBtn.textContent='Next Stage →';
+    if(starsEl) starsEl.textContent=`Stage ${currentLevel+1} / ${LEVELS.length}`;
+  }
+  winScreen.style.display='flex';
+  audioCtx.resume().then(snd_goal);
+}
+
+function resetLevel() {
+  winScreen.style.display='none';
+  rings.forEach(r=>{
+    r.completed=false;
+    r.group.scale.setScalar(1);
+    r.mat.color.set(curDefs[r.id][8]);
+    r.mat.emissive.set(curDefs[r.id][8]);
+    r.mat.emissiveIntensity=0.25;
+  });
+  goal.active=false; goal.scored=false;
+  // reset goal appearance
+  goal.group.traverse(o=>{
+    if(o.isMesh&&o.material.transparent) o.material.opacity=0.35;
+    if(o.isMesh&&!o.material.wireframe&&o.material.color&&o.material.opacity>0.9)
+      o.material.color.set(0xffffff);
+  });
+  goalPip.classList.remove('active');
+  dribbling=true;
+  startLevel();
+}
+
+document.getElementById('intro-btn').addEventListener('click', startLevel);
+document.getElementById('replay-btn').addEventListener('click', resetLevel);
+document.getElementById('next-btn').addEventListener('click',()=>{
+  if(currentLevel<LEVELS.length-1){
+    currentLevel++;
+    buildRings(currentLevel);
+    resetLevel();
+  }else{
+    window.location.href='level2.html';
+  }
+});
+
+// ─── INPUT ────────────────────────────────────────────────────────────────────
+const keys={forward:false,backward:false,left:false,right:false,sprint:false,jump:false};
+let jumpQ=false;
+
+document.addEventListener('keydown',e=>{
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    keys.forward  =true;break;
+    case'KeyS':case'ArrowDown':  keys.backward =true;break;
+    case'KeyA':case'ArrowLeft':  keys.left     =true;break;
+    case'KeyD':case'ArrowRight': keys.right    =true;break;
+    case'ShiftLeft':case'ShiftRight':keys.sprint=true;break;
+    case'Space':e.preventDefault();if(player.onGround)jumpQ=true;break;
+    case'KeyR':bphys.reset();dribbling=true;break;
+  }
+});
+document.addEventListener('keyup',e=>{
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    keys.forward  =false;break;
+    case'KeyS':case'ArrowDown':  keys.backward =false;break;
+    case'KeyA':case'ArrowLeft':  keys.left     =false;break;
+    case'KeyD':case'ArrowRight': keys.right    =false;break;
+    case'ShiftLeft':case'ShiftRight':keys.sprint=false;break;
+  }
+});
+
+// ─── CAMERA ORBIT ─────────────────────────────────────────────────────────────
+let camTheta=0,camPhi=0.38;
+let rmbDown=false,lastMX=0,lastMY=0;
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('mousedown',e=>{if(e.button===2){rmbDown=true;lastMX=e.clientX;lastMY=e.clientY;}});
+window.addEventListener('mouseup',  e=>{if(e.button===2)rmbDown=false;});
+window.addEventListener('mousemove',e=>{
+  if(!rmbDown)return;
+  camTheta-=(e.clientX-lastMX)*.005;camPhi-=(e.clientY-lastMY)*.005;
+  camPhi=Math.max(.05,Math.min(1.25,camPhi));lastMX=e.clientX;lastMY=e.clientY;
+});
+let birdsTriggered=false;
+document.addEventListener('keydown',e=>{
+  if(!birdsTriggered&&['KeyW','KeyA','KeyS','KeyD'].includes(e.code)){
+    audioCtx.resume().then(startBirds);birdsTriggered=true;
+  }
+},{passive:true});
+
+// ─── KICK / POWER METER ───────────────────────────────────────────────────────
+const powerWrap=document.getElementById('power-wrap');
+const powerFill=document.getElementById('power-fill');
+const nearEl   =document.getElementById('near');
+const kicksEl  =document.getElementById('kicks');
+const spdEl    =document.getElementById('spd');
+let charging=false,chargeT=0;
+const MAX_CHARGE=1.6;
+let kickCooldown=0;
+
+function distToBall(){
+  return player.pos.distanceTo(new THREE.Vector3(bphys.pos.x,bphys.pos.y,bphys.pos.z));
+}
+
+canvas.addEventListener('mousedown',e=>{
+  if(e.button!==0||kickCooldown>0||!levelActive)return;
+  // always allow charge when dribbling; require proximity otherwise
+  if(dribbling||distToBall()<=2.6){charging=true;chargeT=0;}
+});
+window.addEventListener('mouseup',e=>{
+  if(e.button!==0)return;
+  if(charging){doKick(Math.min(1,chargeT/MAX_CHARGE));charging=false;chargeT=0;
+    powerWrap.style.display='none';powerFill.style.width='0%';}
+});
+
+function doKick(power){
+  let dx,dz;
+  if(dribbling){
+    // kick in facing direction – ball is right in front
+    dx=Math.sin(player.facing); dz=Math.cos(player.facing);
+    dribbling=false;
+  }else{
+    if(distToBall()>2.8)return;
+    dx=bphys.pos.x-player.pos.x; dz=bphys.pos.z-player.pos.z;
+    const dd=Math.sqrt(dx*dx+dz*dz);
+    if(dd>0.05){dx/=dd;dz/=dd;}else{dx=Math.sin(player.facing);dz=Math.cos(player.facing);}
+  }
+  player.triggerKick();
+  bphys.kick(new THREE.Vector3(dx,0,dz),power);
+  audioCtx.resume().then(()=>snd_kick(power));
+  totalKicks++;kicksEl.textContent=`Kicks: ${totalKicks}`;
+  kickCooldown=0.4;
+}
+
+// ─── CAMERA ───────────────────────────────────────────────────────────────────
+const CAM_DIST=7.5;
+const camTarget=new THREE.Vector3(),camWant=new THREE.Vector3();
+function updateCamera(dt){
+  const px=player.pos.x,py=player.pos.y+1.1,pz=player.pos.z;
+  camWant.set(
+    px+Math.sin(camTheta)*Math.cos(camPhi)*CAM_DIST,
+    py+Math.sin(camPhi)*CAM_DIST,
+    pz+Math.cos(camTheta)*Math.cos(camPhi)*CAM_DIST
+  );
+  const a=1-Math.pow(.01,dt);
+  camera.position.lerp(camWant,a);
+  camTarget.lerp(new THREE.Vector3(px,py,pz),a);
+  camera.lookAt(camTarget);
+}
+
+// ─── GAME LOOP ────────────────────────────────────────────────────────────────
+let prev=performance.now();
+let elapsed=0;
+const prevBall=new THREE.Vector3();
+
+function tick(){
+  requestAnimationFrame(tick);
+  const now=performance.now();
+  const dt=Math.min((now-prev)/1000,.05);
+  prev=now; elapsed+=dt;
+
+  // Save prev ball pos for ring/goal detection
+  prevBall.copy(bphys.pos);
+
+  // Player updates first so facing direction is current before dribble positioning
+  const jmp=jumpQ;jumpQ=false;
+  player.update(dt,{...keys,jump:jmp},camTheta);
+
+  if(dribbling){
+    // Ball rolls along the ground in front of player (no bounce)
+    const fwd=player.getFacingDir();
+    bphys.pos.set(player.pos.x+fwd.x*0.6, 0.23, player.pos.z+fwd.z*0.6);
+    bphys.vel.set(0,0,0);
+    // roll spin from player motion so it looks like rolling, not sliding
+    const pl=Math.sqrt(player.vel.x*player.vel.x+player.vel.z*player.vel.z);
+    if(pl>0.01){
+      const axis=new THREE.Vector3(-player.vel.z,0,player.vel.x).normalize();
+      ballQuat.premultiply(new THREE.Quaternion().setFromAxisAngle(axis,pl*dt/bphys.radius));
+      ballMesh.quaternion.copy(ballQuat);
+    }
+  }else{
+    bphys.update(dt);
+    // Re-acquire ball when close and it's settled
+    if(levelActive&&distToBall()<0.9&&bphys.getSpeed()<2.5){
+      dribbling=true;
+    }
+  }
+
+  // Sync ball mesh + spin
+  ballMesh.position.copy(bphys.pos);
+  const spd=bphys.getSpeed();
+  if(!dribbling&&spd>0.15){
+    const vlen=new THREE.Vector3(bphys.vel.x,0,bphys.vel.z).length();
+    if(vlen>0.01){
+      const axis=new THREE.Vector3(-bphys.vel.z,0,bphys.vel.x).normalize();
+      ballQuat.premultiply(new THREE.Quaternion().setFromAxisAngle(axis,vlen*dt/bphys.radius));
+    }
+    ballMesh.quaternion.copy(ballQuat);
+  }
+
+  world.update(dt);
+  if(kickCooldown>0)kickCooldown-=dt;
+
+  // Power meter
+  if(charging){
+    chargeT+=dt;
+    powerWrap.style.display='flex';
+    powerFill.style.width=Math.min(1,chargeT/MAX_CHARGE)*100+'%';
+    if(chargeT>=MAX_CHARGE){doKick(1);charging=false;chargeT=0;
+      powerWrap.style.display='none';powerFill.style.width='0%';}
+  }
+
+  // Near-ball hint: always show while dribbling, show when near loose ball
+  const showHint=levelActive&&kickCooldown<=0&&(dribbling||distToBall()<=2.4);
+  nearEl.style.display=showHint?'block':'none';
+
+  snd_roll(dribbling?0:spd);
+  spdEl.textContent=`Speed: ${spd.toFixed(1)}`;
+
+  // ── Level logic ──
+  if(levelActive){
+    const currBall=bphys.pos.clone();
+
+    rings.forEach(r=>r.update(elapsed));
+
+    if(nextRing < 5){
+      const ar=rings[nextRing];
+      ar.pulse(elapsed);
+      ringLight.position.set(ar.center.x,ar.center.y+0.6,ar.center.z);
+      ringLight.intensity=1.5+Math.abs(Math.sin(elapsed*3))*2.5;
+      if(ar.checkPass(prevBall, currBall)){
+        ar.markDone();
+        nextRing++;
+        audioCtx.resume().then(snd_ring);
+        updateRingHud();
+        if(nextRing===5){goal.activate();ringLight.intensity=0;}
+      }
+    } else {
+      ringLight.intensity=0;
+      if(goal.check(prevBall, currBall)) winLevel();
+    }
+  }
+
+  updateCamera(dt);
+  renderer.render(scene,camera);
+}
+
+tick();
+
+// ── Mobile touch controls ──
+if(Mobile.ready){
+  Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.button({label:'KICK',canvasMouse:true});
+  Mobile.button({label:'JUMP',code:'Space'});
+  Mobile.button({label:'RUN',code:'ShiftLeft'});
+}
+</script>
+</body>
+</html>

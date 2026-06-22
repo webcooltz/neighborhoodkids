@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neighborhood Kids – Mackayla</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; overflow:hidden; font-family:'Arial Rounded MT Bold',Arial,sans-serif; }
+canvas#c { display:block; width:100vw; height:100vh; }
+
+#intro {
+  position:fixed; inset:0; background:rgba(5,5,15,.93);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; z-index:100;
+}
+.lvl-tag  { color:#ce93d8; font-size:13px; letter-spacing:4px; text-transform:uppercase; }
+.lvl-name { color:#fff; font-size:62px; font-weight:900; letter-spacing:6px; text-transform:uppercase; }
+.lvl-desc { color:rgba(255,255,255,.6); font-size:15px; text-align:center; max-width:460px; line-height:1.7; }
+#intro-btn {
+  margin-top:10px; padding:14px 48px; font-size:18px; font-weight:bold;
+  background:#7b1fa2; color:#fff; border:none; border-radius:30px;
+  cursor:pointer; letter-spacing:2px; text-transform:uppercase;
+  box-shadow:0 4px 16px rgba(123,31,162,.55); transition:transform .1s;
+}
+#intro-btn:hover { transform:scale(1.05); }
+
+#approach-hint {
+  position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,.75); color:#fff; padding:10px 24px; border-radius:24px;
+  font-size:15px; letter-spacing:2px; border:2px solid #ab47bc;
+  display:none; z-index:60; pointer-events:none;
+}
+#approach-hint b { color:#ce93d8; }
+
+#hud {
+  position:fixed; top:14px; right:16px; display:none;
+  flex-direction:column; gap:6px; align-items:flex-end;
+}
+.badge { background:rgba(0,0,0,.65); color:#fff; padding:4px 12px; border-radius:20px; font-size:13px; letter-spacing:1px; }
+
+#board-progress {
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  display:none; flex-direction:column; align-items:center; gap:6px;
+}
+.board-pips { display:flex; gap:7px; }
+.pip { width:22px; height:22px; border-radius:4px; background:rgba(255,255,255,.18); border:2px solid rgba(255,255,255,.3); transition:background .2s; }
+.pip.done   { background:#ab47bc; border-color:#ce93d8; }
+.pip.active { background:#fff; border-color:#fff; animation:pulse .5s infinite alternate; }
+@keyframes pulse { from{opacity:.7} to{opacity:1} }
+#board-label { color:rgba(255,255,255,.55); font-size:11px; letter-spacing:2px; }
+
+#lives-row {
+  position:fixed; top:14px; left:16px; display:none;
+  flex-direction:row; gap:5px; align-items:center;
+}
+.life-icon { font-size:22px; transition:opacity .3s; }
+.life-icon.lost { opacity:.18; filter:grayscale(1); }
+
+#feedback {
+  position:fixed; top:38%; left:50%; transform:translate(-50%,-50%);
+  font-size:52px; font-weight:900; letter-spacing:6px; pointer-events:none;
+  z-index:70; opacity:0; text-shadow:0 3px 22px rgba(0,0,0,.7);
+}
+
+#ready-text {
+  position:fixed; top:55%; left:50%; transform:translate(-50%,-50%);
+  font-size:22px; font-weight:bold; color:rgba(255,255,255,.7);
+  letter-spacing:4px; text-transform:uppercase; pointer-events:none;
+  z-index:65; display:none;
+}
+
+#win, #fail {
+  position:fixed; inset:0; background:rgba(5,5,15,.93);
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; z-index:100;
+}
+.win-title  { color:#ce93d8; font-size:52px; font-weight:900; letter-spacing:4px; }
+.fail-title { color:#ef5350; font-size:52px; font-weight:900; letter-spacing:4px; }
+.win-stat   { color:rgba(255,255,255,.75); font-size:16px; }
+.win-btns   { display:flex; gap:12px; margin-top:8px; }
+.win-btn    { padding:12px 36px; font-size:15px; font-weight:bold; letter-spacing:2px;
+              text-transform:uppercase; border:none; border-radius:24px; cursor:pointer; }
+.win-btn.primary   { background:#7b1fa2; color:#fff; }
+.win-btn.secondary { background:rgba(255,255,255,.12); color:#fff; }
+
+#instr {
+  position:fixed; bottom:16px; left:16px;
+  color:rgba(255,255,255,.35); font-size:12px; line-height:1.8; letter-spacing:1px;
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="intro">
+  <div class="lvl-tag">Level 06</div>
+  <div class="lvl-name">MACKAYLA</div>
+  <div class="lvl-desc">Mackayla is ready to test her karate skills!<br>Walk up to the board stand and press E to begin.<br>Hit Space when the ring turns green — 5 belts, each faster!</div>
+  <button id="intro-btn">LET'S GO!</button>
+</div>
+
+<div id="approach-hint">Press <b>E</b> to start training</div>
+
+<div id="hud">
+  <div class="badge" id="score-badge">Score: 0</div>
+  <div class="badge" id="perfect-badge">Perfects: 0</div>
+</div>
+
+<div id="board-progress">
+  <div class="board-pips">
+    <div class="pip active" id="pip0"></div>
+    <div class="pip"        id="pip1"></div>
+    <div class="pip"        id="pip2"></div>
+    <div class="pip"        id="pip3"></div>
+    <div class="pip"        id="pip4"></div>
+    <div class="pip"        id="pip5"></div>
+  </div>
+  <div id="board-label">BOARD 1 OF 6</div>
+</div>
+
+<div id="lives-row">
+  <div class="life-icon" id="life0">🥋</div>
+  <div class="life-icon" id="life1">🥋</div>
+  <div class="life-icon" id="life2">🥋</div>
+</div>
+
+<div id="feedback"></div>
+<div id="ready-text">GET READY...</div>
+
+<div id="win">
+  <div class="win-title">🥋 KI-YA!</div>
+  <div class="win-stat" id="win-score"></div>
+  <div class="win-stat" id="win-perfects"></div>
+  <div id="win-stars-earned" style="font-size:38px;color:#ffd54f;letter-spacing:8px;margin:6px 0"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="replay-btn">Try Again</button>
+    <button class="win-btn secondary" id="next-btn">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="fail">
+  <div class="fail-title">😤 KEEP TRAINING!</div>
+  <div class="win-stat" id="fail-stat"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="retry-btn">Try Again</button>
+    <button class="win-btn secondary" id="fail-menu-btn">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="instr">Walk: WASD · Right-drag = orbit camera · Approach stand → E to begin<br>Training: press Space when ring turns GREEN for best result<br>Red = too early · Yellow = good · Green = perfect</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="mobile.js"></script>
+<script src="achievements.js"></script>
+<script>
+'use strict';
+
+// ── AUDIO ────────────────────────────────────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function synth(freq, type, vol, dur, freqEnd){
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=type; o.frequency.value=freq;
+  if(freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, audioCtx.currentTime+dur*.7);
+  o.connect(g); g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime;
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.start(t); o.stop(t+dur+.01);
+}
+function noiseBlip(vol, dur, freq, q){
+  const buf=audioCtx.createBuffer(1,Math.ceil(audioCtx.sampleRate*dur),audioCtx.sampleRate);
+  const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const src=audioCtx.createBufferSource(), g=audioCtx.createGain();
+  const f=audioCtx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq||600; f.Q.value=q||1.2;
+  src.buffer=buf; src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime;
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  src.start(t); src.stop(t+dur+.01);
+}
+
+function playChop()    { noiseBlip(.3,.06,300,4); synth(140,'sawtooth',.1,.08); }
+function playBreak()   { noiseBlip(.5,.18,220,2); synth(80,'square',.12,.15,40); }
+function playKiya()    { synth(480,'sawtooth',.15,.06); synth(380,'sawtooth',.12,.1,260); }
+function playMiss()    { synth(180,'sine',.12,.3,120); }
+function playStep()    { noiseBlip(.04,.04,140,2.5); }
+function playReady()   { synth(660,'sine',.08,.12); }
+function playFinish()  {
+  [392,494,587,740,880].forEach((f,i)=>setTimeout(()=>synth(f,'sine',.15,.4),i*100));
+}
+
+// ── THREE.JS ─────────────────────────────────────────────────────────────────
+const canvas3d=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas:canvas3d, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x2a1a3a);
+scene.fog=new THREE.Fog(0x2a1a3a,20,45);
+
+const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,80);
+camera.position.set(0,3,10);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+scene.add(new THREE.AmbientLight(0xc9b8e8,.65));
+const sun=new THREE.DirectionalLight(0xfff0ff,1.2);
+sun.position.set(3,10,6); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.left=-15; sun.shadow.camera.right=15;
+sun.shadow.camera.top=15;   sun.shadow.camera.bottom=-15;
+sun.shadow.camera.far=50;   scene.add(sun);
+const fill=new THREE.DirectionalLight(0x7b1fa2,.4);
+fill.position.set(-5,4,-2); scene.add(fill);
+
+// ── CONSTANTS ────────────────────────────────────────────────────────────────
+const STAND_POS   = new THREE.Vector3(0,0,-1);
+const BOARD_W     = 0.55;
+const BOARD_H     = 1.0;
+const BOARD_D     = 0.08;
+const BOARD_CY    = 1.15;  // board center Y
+const TOTAL_BOARDS= 6;
+const MAX_LIVES   = 3;
+// Ring-shrink speeds per board, one set per belt (stage). Faster = harder timing.
+const SPEED_STAGES = [
+  [0.37, 0.48, 0.60, 0.76, 0.93, 1.12],
+  [0.46, 0.60, 0.75, 0.95, 1.16, 1.40],
+  [0.55, 0.72, 0.90, 1.14, 1.40, 1.68],
+  [0.67, 0.86, 1.08, 1.37, 1.67, 2.02],
+  [0.78, 1.00, 1.26, 1.60, 1.95, 2.35],
+];
+let currentStage = 0;
+let RING_SPEEDS  = SPEED_STAGES[0];
+function setStage(i){ currentStage=i; RING_SPEEDS=SPEED_STAGES[i]; }
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function M(geo,col,shadow){
+  const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+  if(shadow!==false){ m.castShadow=true; m.receiveShadow=true; }
+  return m;
+}
+
+// ── DOJO ─────────────────────────────────────────────────────────────────────
+(function buildDojo(){
+  const BG=THREE.BoxGeometry, PG=THREE.PlaneGeometry;
+
+  // Floor (wood) — wide enough camera never clips edge
+  const floor=M(new PG(40,40),0x6d4c41,false);
+  floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
+
+  // Floor planks (darker lines)
+  for(let z=-18;z<19;z+=0.55){
+    const plank=M(new BG(40,.008,.04),0x5d4037,false);
+    plank.position.set(0,.001,z); plank.receiveShadow=true; scene.add(plank);
+  }
+
+  // Training mat (red rectangle in center)
+  const mat=M(new BG(5,.02,6),0xb71c1c,false);
+  mat.position.set(0,.011,0); mat.receiveShadow=true; scene.add(mat);
+  const matBorder=M(new BG(5.2,.018,6.2),0x7f0000,false);
+  matBorder.position.set(0,.009,0); scene.add(matBorder);
+
+  // Walls — pushed far out so orbit cam never clips (no ceiling)
+  const wallMat=0xf5ebe8;
+  // Back wall close enough to see banner; sides far out
+  const backWall=M(new BG(40,10,.4),wallMat);
+  backWall.position.set(0,5,-18); scene.add(backWall);
+  const leftWall=M(new BG(.4,10,40),wallMat);
+  leftWall.position.set(-18,5,0); scene.add(leftWall);
+  const rightWall=M(new BG(.4,10,40),wallMat);
+  rightWall.position.set(18,5,0); scene.add(rightWall);
+  // No ceiling — open/high dojo feel
+
+  // Banner — on a freestanding backing panel (not attached to back wall)
+  // Floated closer so it's always visible
+  const bannerBacker=M(new BG(3.2,5,.15),0xe8ddf0);
+  bannerBacker.position.set(0,2.5,-7); scene.add(bannerBacker);
+  const banner=M(new BG(1.6,3.2,.1),0xb71c1c);
+  banner.position.set(0,3.5,-7); scene.add(banner);
+  const bS1=M(new BG(.08,3.2,.12),0xffffff);
+  bS1.position.set(-.5,3.5,-6.94); scene.add(bS1);
+  const bS2=M(new BG(.08,3.2,.12),0xffffff);
+  bS2.position.set(.5,3.5,-6.94); scene.add(bS2);
+  const bTop=M(new BG(1.7,.12,.12),0x7f0000);
+  bTop.position.set(0,5.1,-6.93); scene.add(bTop);
+  const bBot=M(new BG(1.7,.12,.12),0x7f0000);
+  bBot.position.set(0,1.95,-6.93); scene.add(bBot);
+  const kH=M(new BG(.7,.12,.12),0xffcdd2);
+  kH.position.set(0,3.5,-6.92); scene.add(kH);
+  const kV=M(new BG(.12,.7,.12),0xffcdd2);
+  kV.position.set(0,3.5,-6.92); scene.add(kV);
+
+  // Side window — on a panel floating near the wall
+  const winPanel=M(new BG(3,4,.2),0xede8f5);
+  winPanel.position.set(-8,2.0,-3); scene.add(winPanel);
+  const winFrame=M(new BG(1.8,1.5,.15),0x8d6e63);
+  winFrame.position.set(-8,3.2,-3); scene.add(winFrame);
+  const winGlass=M(new BG(1.4,1.1,.08),0x80c8f0,false);
+  winGlass.position.set(-7.96,3.2,-3); scene.add(winGlass);
+  const winLight=new THREE.PointLight(0x80c8f0,.45,8);
+  winLight.position.set(-6,3.2,-3); scene.add(winLight);
+
+  // Trophy shelf — freestanding unit near right side
+  const shelfBack=M(new BG(2.8,4,.2),0xede8f5);
+  shelfBack.position.set(8,2.0,2); scene.add(shelfBack);
+  const shelf=M(new BG(2.5,.08,.4),0x8d6e63);
+  shelf.position.set(8,3.4,2); scene.add(shelf);
+  const tc1=M(new THREE.CylinderGeometry(.12,.18,.55,6),0xffd54f);
+  tc1.position.set(7.4,3.7,2); scene.add(tc1);
+  const th1=M(new THREE.SphereGeometry(.14,8,6),0xffd54f);
+  th1.position.set(7.4,4.1,2); scene.add(th1);
+  const tc2=M(new THREE.CylinderGeometry(.1,.15,.44,6),0xbdbdbd);
+  tc2.position.set(8,3.66,2); scene.add(tc2);
+  const th2=M(new THREE.SphereGeometry(.11,8,6),0xbdbdbd);
+  th2.position.set(8,4.0,2); scene.add(th2);
+
+  // Board stand (two vertical posts + base)
+  const sx=STAND_POS.x, sy=0, sz=STAND_POS.z;
+  const post1=M(new THREE.CylinderGeometry(.04,.04,1.45,7),0x9e9e9e);
+  post1.position.set(sx-.3,sy+.725,sz); scene.add(post1);
+  const post2=M(new THREE.CylinderGeometry(.04,.04,1.45,7),0x9e9e9e);
+  post2.position.set(sx+.3,sy+.725,sz); scene.add(post2);
+  const base=M(new BG(.8,.05,.28),0x757575);
+  base.position.set(sx,.025,sz); scene.add(base);
+  // Crossbar at top
+  const xbar=M(new BG(.68,.05,.06),0x9e9e9e);
+  xbar.position.set(sx,sy+1.5,sz); scene.add(xbar);
+  // Clip arms that hold board
+  const clip1=M(new BG(.05,.12,.06),0x757575);
+  clip1.position.set(sx-.26,sy+1.4,sz+.04); scene.add(clip1);
+  const clip2=M(new BG(.05,.12,.06),0x757575);
+  clip2.position.set(sx+.26,sy+1.4,sz+.04); scene.add(clip2);
+
+  // ── Belt rack on left panel (white→black ranks) ──
+  const beltBoard=M(new BG(.14,2.0,.6),0x6d4c41);
+  beltBoard.position.set(-7.86,1.7,-1); scene.add(beltBoard);
+  [0xffffff,0xffeb3b,0xff9800,0x4caf50,0x5d4037,0x212121].forEach((c,i)=>{
+    const y=2.45-i*.34;
+    const belt=M(new BG(.05,.15,1.0),c); belt.position.set(-7.74,y,-1); scene.add(belt);
+    const knot=M(new BG(.1,.2,.16),c);   knot.position.set(-7.7,y,-1); scene.add(knot);
+    const tail=M(new BG(.06,.34,.1),c);  tail.position.set(-7.7,y-.22,-1.07); scene.add(tail);
+  });
+
+  // ── Nunchucks mounted on right panel ──
+  const nboard=M(new BG(.14,1.5,1.3),0x5d4037);
+  nboard.position.set(7.86,2.3,-2); scene.add(nboard);
+  [-.22,.22].forEach(dz=>{
+    const stick=M(new THREE.CylinderGeometry(.05,.05,.78,8),0x1a1a1a);
+    stick.position.set(7.72,2.3,-2+dz); scene.add(stick);
+    const cap=M(new THREE.CylinderGeometry(.055,.055,.06,8),0xffd54f);
+    cap.position.set(7.72,2.68,-2+dz); scene.add(cap);
+  });
+  // Chain link between the two sticks
+  const chain=M(new BG(.05,.1,.4),0xbdbdbd);
+  chain.position.set(7.72,2.74,-2); scene.add(chain);
+  // Pegs holding them
+  [-.22,.22].forEach(dz=>{
+    const peg=M(new THREE.CylinderGeometry(.03,.03,.18,6),0x9e9e9e);
+    peg.rotation.z=Math.PI/2; peg.position.set(7.74,1.95,-2+dz); scene.add(peg);
+  });
+
+  // ── Bo staff on a stand (back-right corner) ──
+  const bo=M(new THREE.CylinderGeometry(.04,.04,2.6,8),0x8d6e63);
+  bo.position.set(6.5,1.3,-6); bo.rotation.z=.12; scene.add(bo);
+  [0.4,2.1].forEach(yy=>{
+    const rack=M(new BG(.16,.14,.5),0x5d4037); rack.position.set(6.62,yy,-6); scene.add(rack);
+  });
+
+  // ── Potted bamboo (back-left corner) ──
+  const pot=M(new THREE.CylinderGeometry(.35,.28,.5,10),0x6d4c41);
+  pot.position.set(-6.5,.25,-6); scene.add(pot);
+  [[-.12,0],[.1,.1],[.02,-.12]].forEach(([dx,dz],i)=>{
+    const stalk=M(new THREE.CylinderGeometry(.05,.06,2.2+i*.3,7),0x7cb342);
+    stalk.position.set(-6.5+dx,1.35+i*.15,-6+dz); scene.add(stalk);
+    const leaf=M(new BG(.5,.16,.08),0x558b2f);
+    leaf.position.set(-6.5+dx+.25,2.2+i*.2,-6+dz); leaf.rotation.z=-.5; scene.add(leaf);
+  });
+
+  // ── Floor cushions (zabuton) along the back ──
+  [[-2.5,-3.2,0xd84315],[2.5,-3.2,0x6a1b9a]].forEach(([x,z,c])=>{
+    const cush=M(new BG(.9,.16,.9),c); cush.position.set(x,.1,z); scene.add(cush);
+    const tuft=M(new BG(.1,.06,.1),0xffffff); tuft.position.set(x,.19,z); scene.add(tuft);
+  });
+
+  // ── Round paper lanterns hanging ──
+  [[-3.5,0xd32f2f],[3.5,0xd32f2f]].forEach(([x,c])=>{
+    const lan=M(new THREE.SphereGeometry(.32,10,8),c);
+    lan.scale.set(1,.85,1); lan.position.set(x,4.4,-5.5); scene.add(lan);
+    const cord=M(new BG(.02,.8,.02),0x424242); cord.position.set(x,4.9,-5.5); scene.add(cord);
+  });
+})();
+
+// ── MACKAYLA CHARACTER ───────────────────────────────────────────────────────
+class MackaylaPlayer {
+  constructor(){
+    this.pos       = new THREE.Vector3(0,0,4.5);
+    this.facing    = Math.PI;  // face -z toward stand
+    this.walkPhase = 0;
+    this.stepTimer = 0;
+    this.parts     = {};
+    this.group     = new THREE.Group();
+    scene.add(this.group);
+    this._build();
+  }
+
+  _m(geo,col,x,y,z){
+    const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+    m.castShadow=true; m.receiveShadow=true;
+    m.position.set(x||0,y||0,z||0); return m;
+  }
+
+  _build(){
+    const BG=THREE.BoxGeometry, SG=THREE.SphereGeometry, CG=THREE.CylinderGeometry;
+
+    // Gi top (white jacket with purple lapels)
+    this.parts.torso=this._m(new BG(.5,.85,.32),0xf5f5f5,0,1.18,0);
+    this.group.add(this.parts.torso);
+    // Lapel overlap down the front
+    this.group.add(this._m(new BG(.16,.78,.04),0xeceff1,0,1.16,.165));
+    // Gi collar V-shape (purple trim)
+    const cL=this._m(new BG(.11,.5,.05),0x7b1fa2,-.12,.95,.17);
+    cL.rotation.z=.28; this.group.add(cL);
+    const cR=this._m(new BG(.11,.5,.05),0x7b1fa2,.12,.95,.17);
+    cR.rotation.z=-.28; this.group.add(cR);
+    // Black belt
+    this.group.add(this._m(new BG(.54,.1,.36),0x212121,0,.82,0));
+    // Belt knot
+    this.group.add(this._m(new BG(.1,.1,.08),0x212121,0,.82,.18));
+
+    // Head (skin)
+    this.parts.head=this._m(new BG(.38,.38,.36),0xffe0bd,0,1.75,0);
+    this.group.add(this.parts.head);
+    // Hair (dark, pulled back)
+    this.group.add(this._m(new BG(.42,.18,.4),0x1a1a1a,0,1.95,-.05));
+    // Hair bun on top
+    const bun=new THREE.Mesh(new SG(.13,8,6),new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+    bun.castShadow=true; bun.position.set(0,2.12,-.08); this.group.add(bun);
+    // Eyes
+    this.group.add(this._m(new BG(.1,.08,.04),0x333333,-.1,1.76,.19));
+    this.group.add(this._m(new BG(.1,.08,.04),0x333333, .1,1.76,.19));
+    // Mouth (slight smile)
+    this.group.add(this._m(new BG(.12,.04,.04),0xd4956a,0,1.67,.19));
+
+    // Gi pants (white)
+    this.parts.lLP=new THREE.Group(); this.parts.lLP.position.set(.13,.79,0);
+    this.parts.lLP.add(this._m(new BG(.22,.82,.28),0xf5f5f5,0,-.41,0));
+    this.parts.lLP.add(this._m(new BG(.22,.22,.3) ,0x212121,0,-.68,0));  // black shoes
+    this.group.add(this.parts.lLP);
+
+    this.parts.rLP=new THREE.Group(); this.parts.rLP.position.set(-.13,.79,0);
+    this.parts.rLP.add(this._m(new BG(.22,.82,.28),0xf5f5f5,0,-.41,0));
+    this.parts.rLP.add(this._m(new BG(.22,.22,.3) ,0x212121,0,-.68,0));
+    this.group.add(this.parts.rLP);
+
+    // Gi sleeves (white with purple cuff)
+    this.parts.lAP=new THREE.Group(); this.parts.lAP.position.set(.32,1.52,0);
+    this.parts.lAP.add(this._m(new BG(.2,.7,.24),0xf5f5f5,0,-.35,0));
+    this.parts.lAP.add(this._m(new BG(.21,.1,.25),0x7b1fa2,0,-.62,0)); // cuff
+    this.parts.lAP.add(this._m(new BG(.18,.2,.22),0xffe0bd,0,-.74,0));  // hand
+    this.group.add(this.parts.lAP);
+
+    this.parts.rAP=new THREE.Group(); this.parts.rAP.position.set(-.32,1.52,0);
+    this.parts.rAP.add(this._m(new BG(.2,.7,.24),0xf5f5f5,0,-.35,0));
+    this.parts.rAP.add(this._m(new BG(.21,.1,.25),0x7b1fa2,0,-.62,0)); // cuff
+    this.parts.rAP.add(this._m(new BG(.18,.2,.22),0xffe0bd,0,-.74,0));
+    this.group.add(this.parts.rAP);
+  }
+
+  // Walk phase (camera-relative WASD)
+  updateWalk(dt, wk, camTheta){
+    let dx=0, dz=0;
+    const sinT=Math.sin(camTheta), cosT=Math.cos(camTheta);
+    if(wk.forward)  { dx-=sinT; dz-=cosT; }
+    if(wk.backward) { dx+=sinT; dz+=cosT; }
+    if(wk.left)     { dx-=cosT; dz+=sinT; }
+    if(wk.right)    { dx+=cosT; dz-=sinT; }
+    const len=Math.sqrt(dx*dx+dz*dz);
+    const moving=len>.01;
+    if(moving){ dx/=len; dz/=len; this.facing=Math.atan2(dx,dz); }
+    const spd=wk.sprint?6.5:3.8;
+    this.pos.x=Math.max(-5,Math.min(5, this.pos.x+dx*spd*dt));
+    this.pos.z=Math.max(-4,Math.min(6, this.pos.z+dz*spd*dt));
+    this.group.position.copy(this.pos);
+    this.group.rotation.y=this.facing;
+    this.group.rotation.x=0; this.group.rotation.z=0;
+    this._animWalk(dt,moving,wk.sprint);
+  }
+
+  _animWalk(dt,moving,sprint){
+    if(moving){
+      this.walkPhase+=dt*(sprint?9:5.5);
+      const s=Math.sin(this.walkPhase)*.65;
+      this.parts.lLP.rotation.x= s; this.parts.rLP.rotation.x=-s;
+      this.parts.lAP.rotation.x=-s*.5; this.parts.rAP.rotation.x=s*.5;
+      this.parts.lAP.rotation.z= .2;   this.parts.rAP.rotation.z=-.2;
+      this.stepTimer-=dt;
+      if(this.stepTimer<0){ playStep(); this.stepTimer=sprint?.17:.28; }
+    } else {
+      ['lLP','rLP','lAP','rAP'].forEach(k=>{ this.parts[k].rotation.x*=.82; });
+      this.parts.lAP.rotation.z*=.82; this.parts.rAP.rotation.z*=.82;
+      this.stepTimer=0;
+      this.parts.head.position.y=1.75+Math.sin(Date.now()*.0016)*.02;
+    }
+  }
+
+  // Snap to karate position (called on startKarate)
+  goToKarataStance(){
+    // Mackayla stands in front of board at z=STAND_POS.z, facing -z (toward board behind her... no)
+    // She stands at z=+0.7, board at z=-1, she faces -z (Math.PI) → arm swings toward board
+    this.pos.set(0, 0, 0.7);
+    this.group.position.copy(this.pos);
+    this.group.rotation.set(0, Math.PI, 0);  // face -z toward board stand
+    // Guard pose: lAP forward (toward board), rAP slightly back (ready to chop)
+    this.parts.lAP.rotation.set(-0.8, 0, .18);
+    this.parts.rAP.rotation.set( 0.5, 0, -.18);
+    this.parts.lLP.rotation.set(0,0,0);
+    this.parts.rLP.rotation.set(0,0,0);
+  }
+
+  // Chop animation: chopT 0→1
+  // With rotation.y=Math.PI: negative rAP.rotation.x = arm swings toward board (-z)
+  // positive rAP.rotation.x = arm raises back (+z, toward camera)
+  animateChop(chopT){
+    if(chopT<.38){
+      const t=chopT/.38;
+      // Raise arm back (positive x = toward camera)
+      this.parts.rAP.rotation.x=0.5+1.8*t;
+      this.group.rotation.x=0.06*t;
+    } else {
+      const t=(chopT-.38)/.62;
+      // Chop forward (swing negative x = toward board)
+      this.parts.rAP.rotation.x=2.3-3.2*t;
+      this.group.rotation.x=0.06-0.14*t;
+    }
+  }
+
+  // Reset arm after chop
+  resetKarateArms(){
+    this.parts.rAP.rotation.set(0.5,0,-.18);
+    this.group.rotation.x=0;
+  }
+}
+
+const player=new MackaylaPlayer();
+
+// ── BOARD + RING ─────────────────────────────────────────────────────────────
+let boardMesh=null;
+let boardRing=null;
+const pieces=[]; // flying board pieces after break
+
+function buildBoardMesh(){
+  const m=M(new THREE.BoxGeometry(BOARD_W,BOARD_H,BOARD_D),0xa1887f);
+  m.position.set(STAND_POS.x, BOARD_CY, STAND_POS.z);
+  scene.add(m); boardMesh=m;
+}
+
+function buildRing(){
+  const geo=new THREE.RingGeometry(.03,.27,40);
+  const mat=new THREE.MeshLambertMaterial({
+    color:0xef5350, side:THREE.DoubleSide, transparent:true, opacity:.9
+  });
+  boardRing=new THREE.Mesh(geo,mat);
+  boardRing.position.set(STAND_POS.x, BOARD_CY, STAND_POS.z+BOARD_D*.5+.01);
+  boardRing.visible=false;
+  scene.add(boardRing);
+
+  // Bullseye dot at center
+  const dot=new THREE.Mesh(
+    new THREE.CircleGeometry(.04,16),
+    new THREE.MeshLambertMaterial({color:0x66bb6a,side:THREE.DoubleSide})
+  );
+  dot.position.set(STAND_POS.x, BOARD_CY, STAND_POS.z+BOARD_D*.5+.015);
+  scene.add(dot);
+}
+
+buildBoardMesh();
+buildRing();
+
+function breakBoardAnim(){
+  if(boardMesh){ scene.remove(boardMesh); boardMesh=null; }
+  const woodMat=new THREE.MeshLambertMaterial({color:0x8d6e63});
+  const makeHalf=(yOff,vx,vy,rx)=>{
+    const h=new THREE.Mesh(new THREE.BoxGeometry(BOARD_W,BOARD_H*.5,BOARD_D),woodMat);
+    h.position.set(STAND_POS.x, BOARD_CY+yOff, STAND_POS.z);
+    h.castShadow=true; scene.add(h);
+    pieces.push({mesh:h,vx,vy,vz:.3+Math.random()*.4,rx,t:0});
+  };
+  makeHalf( BOARD_H*.25, -1.4,  4.5, -4);
+  makeHalf(-BOARD_H*.25,  1.4, -0.8,  3.5);
+}
+
+// ── GAME STATE ────────────────────────────────────────────────────────────────
+let gamePhase='walk';   // 'walk' | 'karate'
+let karateState='idle'; // 'idle'|'ready_wait'|'ring'|'chopping'|'result'|'between'
+let levelActive=false, finished=false;
+let currentBoard=0;
+let lives=MAX_LIVES;
+let score=0, perfects=0;
+let ringScale=1.0;
+let ringActive=false;
+let chopT=0;
+let chopResult='';  // 'perfect'|'good'|'miss'
+let stateTimer=0;
+let feedTimer=0;
+let jumpConsumed=false;
+
+const walkKeys={forward:false,backward:false,left:false,right:false,sprint:false};
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function updateLivesUI(){
+  for(let i=0;i<MAX_LIVES;i++){
+    const el=document.getElementById('life'+i);
+    if(el) el.className='life-icon'+(i>=lives?' lost':'');
+  }
+}
+
+function updatePips(){
+  for(let i=0;i<TOTAL_BOARDS;i++){
+    const el=document.getElementById('pip'+i);
+    if(!el) continue;
+    if(i<currentBoard)      el.className='pip done';
+    else if(i===currentBoard)el.className='pip active';
+    else                    el.className='pip';
+  }
+  document.getElementById('board-label').textContent=
+    'BOARD '+(currentBoard+1)+' OF '+TOTAL_BOARDS;
+}
+
+function updateHudUI(){
+  document.getElementById('score-badge').textContent='Score: '+score;
+  document.getElementById('perfect-badge').textContent='Perfects: '+perfects;
+}
+
+const feedEl=document.getElementById('feedback');
+const readyEl=document.getElementById('ready-text');
+let feedTimeoutId=-1;
+
+function showFeedback(text,col,dur){
+  feedEl.textContent=text; feedEl.style.color=col;
+  feedEl.style.opacity='1';
+  clearTimeout(feedTimeoutId);
+  feedTimeoutId=setTimeout(()=>{ feedEl.style.opacity='0'; }, (dur||900));
+}
+
+// ── WIN / FAIL / RESET ───────────────────────────────────────────────────────
+function saveStars(lvl,s){
+  const k='tuck_stars_'+lvl;
+  if(s>parseInt(localStorage.getItem(k)||'0')) localStorage.setItem(k,String(s));
+  if(window.Ach) Ach.check();
+  const el=document.getElementById('win-stars-earned');
+  if(el) el.textContent='★'.repeat(s)+'☆'.repeat(3-s);
+}
+function winLevel(){
+  finished=true;
+  document.getElementById('win-score').textContent='Score: '+score;
+  document.getElementById('win-perfects').textContent='Perfect breaks: '+perfects+' / '+TOTAL_BOARDS;
+  const last=currentStage>=SPEED_STAGES.length-1;
+  const nextBtn=document.getElementById('next-btn');
+  const winTitle=document.querySelector('.win-title');
+  if(last){
+    winTitle.textContent='🥋 KI-YA!';
+    nextBtn.textContent='⌂ Menu'; nextBtn.dataset.action='menu';
+    saveStars(6, perfects>=5?3:perfects>=3?2:1);
+  }else{
+    winTitle.textContent=`🥋 BELT ${currentStage+1} DONE!`;
+    nextBtn.textContent='Next Belt →'; nextBtn.dataset.action='next';
+    document.getElementById('win-stars-earned').textContent=`Belt ${currentStage+1} / ${SPEED_STAGES.length}`;
+  }
+  document.getElementById('win').style.display='flex';
+  hideGameUI();
+  playFinish();
+}
+
+function failLevel(){
+  finished=true;
+  document.getElementById('fail-stat').textContent=
+    'Broke '+(currentBoard)+' of '+TOTAL_BOARDS+' boards!';
+  document.getElementById('fail').style.display='flex';
+  hideGameUI();
+}
+
+function hideGameUI(){
+  document.getElementById('hud').style.display='none';
+  document.getElementById('board-progress').style.display='none';
+  document.getElementById('lives-row').style.display='none';
+  readyEl.style.display='none';
+}
+
+function resetLevel(){
+  document.getElementById('win').style.display='none';
+  document.getElementById('fail').style.display='none';
+  document.getElementById('approach-hint').style.display='none';
+  readyEl.style.display='none';
+  feedEl.style.opacity='0';
+  currentBoard=0; lives=MAX_LIVES; score=0; perfects=0;
+  finished=false; karateState='idle'; ringActive=false;
+  chopT=0; stateTimer=0;
+
+  // Clean up pieces
+  pieces.forEach(p=>scene.remove(p.mesh)); pieces.length=0;
+  // Rebuild board
+  if(boardMesh) scene.remove(boardMesh);
+  buildBoardMesh();
+  if(boardRing) boardRing.visible=false;
+
+  gamePhase='walk';
+  player.pos.set(0,0,4.5); player.facing=Math.PI;
+  player.group.position.copy(player.pos);
+  player.group.rotation.set(0,Math.PI,0);
+  player.parts.lAP.rotation.set(0,0,.2);
+  player.parts.rAP.rotation.set(0,0,-.2);
+  player.parts.lLP.rotation.set(0,0,0);
+  player.parts.rLP.rotation.set(0,0,0);
+
+  document.getElementById('hud').style.display='none';
+  document.getElementById('board-progress').style.display='none';
+  document.getElementById('lives-row').style.display='none';
+  updateLivesUI(); updatePips(); updateHudUI();
+}
+
+// ── KARATE PHASE ─────────────────────────────────────────────────────────────
+function startKarate(){
+  gamePhase='karate';
+  document.getElementById('approach-hint').style.display='none';
+  document.getElementById('hud').style.display='flex';
+  document.getElementById('board-progress').style.display='flex';
+  document.getElementById('lives-row').style.display='flex';
+  updateLivesUI(); updatePips(); updateHudUI();
+  player.goToKarataStance();
+  beginNextBoard();
+}
+
+function beginNextBoard(){
+  // Show board on stand
+  if(boardMesh) scene.remove(boardMesh);
+  buildBoardMesh();
+  if(boardRing) boardRing.visible=false;
+  ringScale=1.0;
+  ringActive=false;
+  karateState='ready_wait';
+  stateTimer=0.65;
+  readyEl.style.display='block';
+  readyEl.textContent='GET READY...';
+  playReady();
+  updatePips();
+}
+
+function startRing(){
+  readyEl.style.display='none';
+  ringScale=1.0;
+  ringActive=true;
+  boardRing.visible=true;
+  boardRing.scale.set(1,1,1);
+  boardRing.material.color.setHex(0xef5350);
+  karateState='ring';
+}
+
+function onSpacePress(){
+  if(karateState!=='ring') return;
+  karateState='chopping';
+  ringActive=false;
+  boardRing.visible=false;
+  chopT=0;
+
+  // Evaluate timing
+  if(ringScale>0.50)      chopResult='miss';
+  else if(ringScale>0.22) chopResult='good';
+  else                    chopResult='perfect';
+}
+
+function autoMiss(){
+  // Ring passed 0 and player didn't press
+  karateState='chopping';
+  ringActive=false;
+  boardRing.visible=false;
+  chopT=0;
+  chopResult='miss';
+}
+
+function applyChopResult(){
+  if(chopResult==='perfect'){
+    score+=100; perfects++;
+    playKiya(); playBreak();
+    breakBoardAnim();
+    showFeedback('PERFECT! 💥','#e040fb',1100);
+  } else if(chopResult==='good'){
+    score+=50;
+    playBreak();
+    breakBoardAnim();
+    showFeedback('GOOD! ✓','#ffd740',900);
+  } else {
+    lives--;
+    playMiss();
+    showFeedback('MISS!','#ef5350',800);
+    // Board stays on stand (miss = didn't break)
+  }
+  updateLivesUI(); updateHudUI();
+  karateState='result';
+  stateTimer=1.1;
+}
+
+// ── CAMERA ───────────────────────────────────────────────────────────────────
+let camTheta=0, camPhi=.32;
+const CAM_DIST=8;
+let rmbDown=false, lastMX=0, lastMY=0;
+
+canvas3d.addEventListener('contextmenu',e=>e.preventDefault());
+canvas3d.addEventListener('mousedown',e=>{
+  if(e.button===2){ rmbDown=true; lastMX=e.clientX; lastMY=e.clientY; }
+});
+window.addEventListener('mouseup',e=>{ if(e.button===2) rmbDown=false; });
+window.addEventListener('mousemove',e=>{
+  if(!rmbDown) return;
+  camTheta-=(e.clientX-lastMX)*.005;
+  camPhi  -=(e.clientY-lastMY)*.005;
+  camPhi=Math.max(.08,Math.min(1.1,camPhi));
+  lastMX=e.clientX; lastMY=e.clientY;
+});
+
+const camWant=new THREE.Vector3();
+const camLookAt=new THREE.Vector3();
+const camLookTmp=new THREE.Vector3();
+const camKarateTgt=new THREE.Vector3(1.6,2.0,2.0);
+const camKarataLook=new THREE.Vector3(0,1.1,-0.2);
+
+function updateCameraWalk(dt){
+  const px=player.pos.x, py=player.pos.y+1.1, pz=player.pos.z;
+  camWant.set(
+    px+Math.sin(camTheta)*Math.cos(camPhi)*CAM_DIST,
+    py+Math.sin(camPhi)*CAM_DIST,
+    pz+Math.cos(camTheta)*Math.cos(camPhi)*CAM_DIST
+  );
+  const a=1-Math.pow(.005,dt);
+  camera.position.lerp(camWant,a);
+  camLookTmp.set(px,py,pz);
+  camLookAt.lerp(camLookTmp,a);
+  camera.lookAt(camLookAt);
+}
+
+function updateCameraKarate(dt){
+  const a=1-Math.pow(.004,dt);
+  camera.position.lerp(camKarateTgt,a);
+  camLookAt.lerp(camKarataLook,a);
+  camera.lookAt(camLookAt);
+}
+
+// ── INPUT ────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(!levelActive) return;
+  if(gamePhase==='karate'){
+    if(e.code==='Space'){
+      e.preventDefault();
+      if(!jumpConsumed){ jumpConsumed=true; onSpacePress(); }
+    }
+    return;
+  }
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    walkKeys.forward=true;  break;
+    case'KeyS':case'ArrowDown':  walkKeys.backward=true; break;
+    case'KeyA':case'ArrowLeft':  walkKeys.left=true;     break;
+    case'KeyD':case'ArrowRight': walkKeys.right=true;    break;
+    case'ShiftLeft':case'ShiftRight': walkKeys.sprint=true; break;
+    case'KeyE':
+      if(!finished && distToStand()<2.6) startKarate(); break;
+  }
+});
+document.addEventListener('keyup',e=>{
+  if(gamePhase==='karate'){
+    if(e.code==='Space'){ jumpConsumed=false; }
+    return;
+  }
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    walkKeys.forward=false;  break;
+    case'KeyS':case'ArrowDown':  walkKeys.backward=false; break;
+    case'KeyA':case'ArrowLeft':  walkKeys.left=false;     break;
+    case'KeyD':case'ArrowRight': walkKeys.right=false;    break;
+    case'ShiftLeft':case'ShiftRight': walkKeys.sprint=false; break;
+  }
+});
+
+function distToStand(){
+  return Math.sqrt(
+    Math.pow(player.pos.x-STAND_POS.x,2)+
+    Math.pow(player.pos.z-STAND_POS.z,2)
+  );
+}
+
+// ── DOM ──────────────────────────────────────────────────────────────────────
+const introEl=document.getElementById('intro');
+const approachEl=document.getElementById('approach-hint');
+
+function startLevel(){
+  introEl.style.display='none';
+  levelActive=true;
+  audioCtx.resume();
+}
+
+document.getElementById('intro-btn').addEventListener('click',startLevel);
+document.getElementById('replay-btn').addEventListener('click',resetLevel);
+document.getElementById('retry-btn').addEventListener('click',resetLevel);
+document.getElementById('next-btn').addEventListener('click',()=>{
+  if(document.getElementById('next-btn').dataset.action==='next'){
+    setStage(currentStage+1);
+    resetLevel();
+  }else{
+    window.location.href='index.html';
+  }
+});
+document.getElementById('fail-menu-btn').addEventListener('click',()=>window.location.href='index.html');
+
+// ── GAME LOOP ─────────────────────────────────────────────────────────────────
+let prev=performance.now();
+
+function tick(){
+  requestAnimationFrame(tick);
+  const now=performance.now(), dt=Math.min((now-prev)/1000,.05); prev=now;
+
+  // Piece physics
+  for(let i=pieces.length-1;i>=0;i--){
+    const p=pieces[i];
+    p.t+=dt; p.vy-=10*dt;
+    p.mesh.position.x+=p.vx*dt;
+    p.mesh.position.y+=p.vy*dt;
+    p.mesh.position.z+=p.vz*dt;
+    p.mesh.rotation.x+=p.rx*dt;
+    p.mesh.rotation.z+=(p.vx>0?2.5:-2.5)*dt;
+    if(p.t>1.5){ scene.remove(p.mesh); pieces.splice(i,1); }
+  }
+
+  if(levelActive && !finished){
+    if(gamePhase==='walk'){
+      player.updateWalk(dt,walkKeys,camTheta);
+      const near=distToStand()<2.6;
+      approachEl.style.display=near?'block':'none';
+      updateCameraWalk(dt);
+    } else {
+      // Karate state machine
+      stateTimer-=dt;
+
+      if(karateState==='ready_wait' && stateTimer<=0){
+        startRing();
+      }
+
+      if(karateState==='ring' && ringActive){
+        ringScale-=RING_SPEEDS[currentBoard]*dt;
+        if(ringScale<=-.05){
+          autoMiss();
+        } else {
+          const s=Math.max(0,ringScale);
+          boardRing.scale.set(s,s,1);
+          if(ringScale>0.50)     boardRing.material.color.setHex(0xef5350);
+          else if(ringScale>0.22) boardRing.material.color.setHex(0xfdd835);
+          else                   boardRing.material.color.setHex(0x66bb6a);
+        }
+      }
+
+      if(karateState==='chopping'){
+        if(chopT===0) playChop();
+        chopT+=dt/0.35;
+        player.animateChop(Math.min(chopT,1));
+        if(chopT>=1){
+          applyChopResult();
+        }
+      }
+
+      if(karateState==='result' && stateTimer<=0){
+        // Advance
+        if(chopResult!=='miss'){
+          // successful break
+          currentBoard++;
+          if(currentBoard>=TOTAL_BOARDS){ winLevel(); }
+          else { karateState='between'; stateTimer=0.3; }
+        } else {
+          // miss: board stays, check lives
+          if(lives<=0){ failLevel(); }
+          else { karateState='between'; stateTimer=0.3; }
+        }
+        player.resetKarateArms();
+      }
+
+      if(karateState==='between' && stateTimer<=0){
+        beginNextBoard();
+      }
+
+      updateCameraKarate(dt);
+    }
+  } else {
+    if(gamePhase==='walk') updateCameraWalk(dt);
+    else updateCameraKarate(dt);
+  }
+
+  renderer.render(scene,camera);
+}
+
+tick();
+
+// ── Mobile touch controls ──
+if(Mobile.ready){
+  Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.button({label:'START',code:'KeyE'});
+  Mobile.button({label:'CHOP',code:'Space'});
+}
+</script>
+</body>
+</html>

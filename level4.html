@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neighborhood Kids – Brady</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; overflow:hidden; font-family:'Arial Rounded MT Bold',Arial,sans-serif; }
+canvas#c { display:block; width:100vw; height:100vh; }
+
+#intro {
+  position:fixed; inset:0; background:rgba(5,10,20,.92);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; z-index:100;
+}
+.lvl-tag  { color:#ffb300; font-size:13px; letter-spacing:4px; text-transform:uppercase; }
+.lvl-name { color:#fff; font-size:62px; font-weight:900; letter-spacing:6px; text-transform:uppercase; }
+.lvl-desc { color:rgba(255,255,255,.6); font-size:15px; text-align:center; max-width:460px; line-height:1.7; }
+#intro-btn {
+  margin-top:10px; padding:14px 48px; font-size:18px; font-weight:bold;
+  background:#f57c00; color:#fff; border:none; border-radius:30px;
+  cursor:pointer; letter-spacing:2px; text-transform:uppercase;
+  box-shadow:0 4px 16px rgba(245,124,0,.55); transition:transform .1s;
+}
+#intro-btn:hover { transform:scale(1.05); }
+
+#approach-hint {
+  position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,.75); color:#fff; padding:10px 24px; border-radius:24px;
+  font-size:15px; letter-spacing:2px; border:2px solid #f57c00;
+  display:none; z-index:60; pointer-events:none;
+}
+#approach-hint b { color:#f57c00; }
+
+#hud {
+  position:fixed; top:14px; right:16px; display:none;
+  flex-direction:column; gap:6px; align-items:flex-end;
+}
+.badge { background:rgba(0,0,0,.65); color:#fff; padding:4px 12px; border-radius:20px; font-size:13px; letter-spacing:1px; }
+
+#prog-wrap {
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  display:none; flex-direction:column; align-items:center; gap:4px;
+}
+#prog-track { width:220px; height:10px; background:rgba(255,255,255,.15); border-radius:5px; overflow:hidden; }
+#prog-fill  { height:100%; width:0%; background:linear-gradient(90deg,#f57c00,#ffca28); border-radius:5px; transition:width .08s; }
+#prog-label { color:rgba(255,255,255,.55); font-size:11px; letter-spacing:1px; }
+
+#bail-display {
+  position:fixed; top:14px; left:16px; display:none;
+  flex-direction:row; gap:4px; align-items:center;
+}
+.bail-icon { font-size:22px; transition:opacity .3s; }
+.bail-icon.used { opacity:.2; filter:grayscale(1); }
+
+#trick-flash {
+  position:fixed; top:32%; left:50%; transform:translate(-50%,-50%);
+  font-size:40px; font-weight:900; letter-spacing:5px; pointer-events:none;
+  z-index:70; opacity:0; text-shadow:0 3px 18px rgba(0,0,0,.6);
+}
+#combo-text {
+  position:fixed; top:calc(32% + 46px); left:50%; transform:translateX(-50%);
+  font-size:18px; font-weight:bold; color:rgba(255,200,50,.9); pointer-events:none;
+  z-index:70; opacity:0; letter-spacing:2px;
+}
+
+#win, #fail {
+  position:fixed; inset:0; background:rgba(5,10,20,.92);
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; z-index:100;
+}
+.win-title  { color:#ffca28; font-size:52px; font-weight:900; letter-spacing:4px; }
+.fail-title { color:#ef5350; font-size:52px; font-weight:900; letter-spacing:4px; }
+.win-stat   { color:rgba(255,255,255,.75); font-size:16px; }
+.win-btns   { display:flex; gap:12px; margin-top:8px; }
+.win-btn    { padding:12px 36px; font-size:15px; font-weight:bold; letter-spacing:2px;
+              text-transform:uppercase; border:none; border-radius:24px; cursor:pointer; }
+.win-btn.primary   { background:#f57c00; color:#fff; }
+.win-btn.secondary { background:rgba(255,255,255,.12); color:#fff; }
+
+#instr {
+  position:fixed; bottom:16px; left:16px;
+  color:rgba(255,255,255,.35); font-size:12px; line-height:1.8; letter-spacing:1px;
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="intro">
+  <div class="lvl-tag">Level 04</div>
+  <div class="lvl-name">BRADY</div>
+  <div class="lvl-desc">Brady's board is waiting on the street!<br>Walk up, press E to hop on, then shred to the finish.<br>5 runs, each faster & gnarlier. Bail 3 times = over!</div>
+  <button id="intro-btn">LET'S GO!</button>
+</div>
+
+<div id="approach-hint">Press <b>E</b> to ride</div>
+
+<div id="hud">
+  <div class="badge" id="score-badge">Score: 0</div>
+  <div class="badge" id="combo-badge">Combo: x1</div>
+  <div class="badge" id="speed-badge">Speed: 0</div>
+</div>
+
+<div id="prog-wrap">
+  <div id="prog-track"><div id="prog-fill"></div></div>
+  <div id="prog-label">SKATE TO THE END!</div>
+</div>
+
+<div id="bail-display">
+  <div class="bail-icon" id="bail0">🛹</div>
+  <div class="bail-icon" id="bail1">🛹</div>
+  <div class="bail-icon" id="bail2">🛹</div>
+</div>
+
+<div id="trick-flash"></div>
+<div id="combo-text"></div>
+
+<div id="win">
+  <div class="win-title">🛹 SHREDDED IT!</div>
+  <div class="win-stat" id="win-score"></div>
+  <div class="win-stat" id="win-tricks"></div>
+  <div class="win-stat" id="win-bails"></div>
+  <div id="win-stars-earned" style="font-size:38px;color:#ffd54f;letter-spacing:8px;margin:6px 0"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="replay-btn">Skate Again</button>
+    <button class="win-btn secondary" id="next-btn">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="fail">
+  <div class="fail-title">😬 BAILED OUT!</div>
+  <div class="win-stat" id="fail-stat"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="retry-btn">Try Again</button>
+    <button class="win-btn secondary" id="fail-menu-btn">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="instr">Walk: WASD · Right-drag = orbit camera · Approach board → E to hop on<br>Riding: A/← dodge left · D/→ dodge right · Space = jump · Steer in air = trick<br>3 bails = game over</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="mobile.js"></script>
+<script src="achievements.js"></script>
+<script>
+'use strict';
+
+// ── AUDIO ────────────────────────────────────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function synth(freq, type, vol, dur, freqEnd){
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=type; o.frequency.value=freq;
+  if(freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, audioCtx.currentTime+dur*.7);
+  o.connect(g); g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime;
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.start(t); o.stop(t+dur+.01);
+}
+function noiseBlip(vol, dur, freq, q){
+  const buf=audioCtx.createBuffer(1,Math.ceil(audioCtx.sampleRate*dur),audioCtx.sampleRate);
+  const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  const src=audioCtx.createBufferSource(), g=audioCtx.createGain();
+  const f=audioCtx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq||600; f.Q.value=q||1.2;
+  src.buffer=buf; src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime;
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  src.start(t); src.stop(t+dur+.01);
+}
+function playOllie()  { noiseBlip(.18,.08,350,2); synth(90,'sine',.08,.12); }
+function playLand()   { noiseBlip(.22,.1,280,1.5); }
+function playTrick()  { synth(660,'square',.07,.1); setTimeout(()=>synth(880,'square',.05,.1),80); }
+function playHit()    { noiseBlip(.28,.2,180,1); synth(80,'sawtooth',.12,.22); }
+function playFinish() { [523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>synth(f,'sine',.14,.5),i*130)); }
+function playStep()   { noiseBlip(.04,.04,140,2.5); }
+
+// ── THREE.JS ─────────────────────────────────────────────────────────────────
+const canvas3d = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas:canvas3d, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb,40,115);
+
+const camera = new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,150);
+camera.position.set(0,5,18);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+scene.add(new THREE.AmbientLight(0xfff3e0,.7));
+const sun = new THREE.DirectionalLight(0xfff8e1,1.3);
+sun.position.set(8,18,10); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-60; sun.shadow.camera.right=60;
+sun.shadow.camera.top=60;   sun.shadow.camera.bottom=-60;
+sun.shadow.camera.far=120;  scene.add(sun);
+
+// ── CONSTANTS ────────────────────────────────────────────────────────────────
+const FINISH_Z  = -128;
+const ROAD_LEN  = 150;
+const START_SPD = 8;
+const MAX_SPD   = 15;
+const ACCEL     = 0.38;
+const MAX_BAILS = 3;
+const BOARD_POS = new THREE.Vector3(0,0,4);
+
+function M(geo,col,shadow){
+  const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+  if(shadow!==false){ m.castShadow=true; m.receiveShadow=true; }
+  return m;
+}
+
+// ── STREET ───────────────────────────────────────────────────────────────────
+(function buildStreet(){
+  const road=M(new THREE.PlaneGeometry(8,ROAD_LEN),0x555566,false);
+  road.rotation.x=-Math.PI/2; road.receiveShadow=true;
+  road.position.set(0,0,-ROAD_LEN/2+8); scene.add(road);
+
+  [-4.1,4.1].forEach(x=>{
+    const s=M(new THREE.BoxGeometry(.18,ROAD_LEN,.01),0xffffff,false);
+    s.rotation.x=-Math.PI/2; s.position.set(x,.005,-ROAD_LEN/2+8);
+    s.receiveShadow=true; scene.add(s);
+  });
+
+  for(let z=2;z>-ROAD_LEN;z-=5){
+    const d=M(new THREE.BoxGeometry(.12,.01,2.4),0xffffff,false);
+    d.position.set(0,.006,z-1); d.receiveShadow=true; scene.add(d);
+  }
+
+  [-6,6].forEach(x=>{
+    const sw=M(new THREE.BoxGeometry(3.5,.12,ROAD_LEN),0x9e9e9e,false);
+    sw.position.set(x,.06,-ROAD_LEN/2+8); sw.receiveShadow=true; scene.add(sw);
+    const curb=M(new THREE.BoxGeometry(.18,.18,ROAD_LEN),0x888888,false);
+    curb.position.set(x-Math.sign(x)*1.6,.09,-ROAD_LEN/2+8); scene.add(curb);
+  });
+
+  [-12,12].forEach(x=>{
+    const g=M(new THREE.PlaneGeometry(14,ROAD_LEN),0x558b2f,false);
+    g.rotation.x=-Math.PI/2; g.position.set(x,0,-ROAD_LEN/2+8); scene.add(g);
+  });
+
+  const hC=[0xef9a9a,0x90caf9,0xa5d6a7,0xffcc80,0xce93d8,0x80deea,0xffab91];
+  let hi=0;
+  [-1,1].forEach(side=>{
+    for(let z=-8;z>-ROAD_LEN+10;z-=22){
+      const col=hC[hi%hC.length]; hi++;
+      const house=M(new THREE.BoxGeometry(7,5.5,8),col);
+      house.position.set(side*15,2.75,z-4); scene.add(house);
+      const roof=new THREE.Mesh(new THREE.ConeGeometry(5.8,2.8,4),new THREE.MeshLambertMaterial({color:0x6d4c41}));
+      roof.castShadow=true; roof.rotation.y=Math.PI/4;
+      roof.position.set(side*15,7.15,z-4); scene.add(roof);
+      const door=M(new THREE.BoxGeometry(1.2,2.2,.12),0x4e342e);
+      door.position.set(side*15-side*3.55,1.1,z-4+.02); scene.add(door);
+      [-1.8,1.4].forEach(dy=>{
+        const win=M(new THREE.BoxGeometry(1.5,1.3,.1),0x81d4fa);
+        win.position.set(side*15+dy,3.4,z-4+.02); scene.add(win);
+        const fr=M(new THREE.BoxGeometry(1.6,1.4,.06),0xd7ccc8);
+        fr.position.set(side*15+dy,3.4,z-4+.04); scene.add(fr);
+      });
+    }
+  });
+
+  [-1,1].forEach(side=>{
+    for(let z=-5;z>-ROAD_LEN;z-=12){
+      const tr=M(new THREE.CylinderGeometry(.18,.22,2.8,6),0x5d4037);
+      tr.position.set(side*8.5,1.4,z); scene.add(tr);
+      const lv=M(new THREE.SphereGeometry(1.6,8,6),0x388e3c);
+      lv.position.set(side*8.5,4.2,z); scene.add(lv);
+    }
+  });
+
+  [-1,1].forEach(side=>{
+    for(let z=-12;z>-ROAD_LEN;z-=24){
+      const post=M(new THREE.CylinderGeometry(.06,.08,5.5,6),0x9e9e9e);
+      post.position.set(side*5,2.75,z); scene.add(post);
+      const arm=M(new THREE.BoxGeometry(.06,.06,.9),0x9e9e9e);
+      arm.position.set(side*5,5.45,z-side*.35); scene.add(arm);
+      const lamp=M(new THREE.BoxGeometry(.35,.2,.55),0xfff9c4);
+      lamp.position.set(side*5,5.35,z-side*.82); scene.add(lamp);
+    }
+  });
+
+  for(let i=0;i<8;i++){
+    const ck=M(new THREE.BoxGeometry(1,0.015,0.9),i%2===0?0xffffff:0x222222,false);
+    ck.position.set(-3.5+i,.008,FINISH_Z); ck.receiveShadow=true; scene.add(ck);
+  }
+  const p1=M(new THREE.CylinderGeometry(.1,.1,5,6),0xf57c00);
+  p1.position.set(-4.5,2.5,FINISH_Z); scene.add(p1);
+  const p2=p1.clone(); p2.position.x=4.5; scene.add(p2);
+  const ban=M(new THREE.BoxGeometry(9,.8,.12),0xf57c00);
+  ban.position.set(0,5.1,FINISH_Z); scene.add(ban);
+  const banT=M(new THREE.BoxGeometry(7,.55,.14),0xffffff);
+  banT.position.set(0,5.1,FINISH_Z+.02); scene.add(banT);
+})();
+
+// ── OBSTACLES ────────────────────────────────────────────────────────────────
+const OBS_STAGES=[
+  // Stage 1 – original gentle course
+  [
+    ['cone', 1.8,-14],['cone',-1.5,-24],['trash',0.6,-33],
+    ['cone',-2.2,-41],['cone', 2.2,-41],['cone', 0.0,-50],
+    ['trash',-1.0,-58],['cone',1.5,-65],['cone',-1.5,-65],
+    ['trash',0.8,-74],['cone',0.0,-82],['cone',-2.0,-90],
+    ['trash',1.5,-98],['cone',2.2,-98],['cone',-1.0,-106],
+    ['cone',1.0,-106],['trash',0.0,-114],['cone',-2.2,-121],
+  ],
+  // Stage 2 – zigzag
+  [
+    ['cone',-2.0,-15],['cone',2.0,-22],['cone',-2.0,-29],['cone',2.0,-36],
+    ['trash',0.0,-44],['cone',-1.5,-52],['cone',1.5,-52],['cone',0.0,-60],
+    ['trash',-2.0,-68],['cone',2.0,-68],['cone',-1.0,-76],['cone',1.0,-84],
+    ['trash',0.0,-92],['cone',-2.2,-100],['cone',2.2,-100],['cone',0.0,-108],
+    ['trash',1.2,-116],['cone',-1.2,-122],
+  ],
+  // Stage 3 – gates (thread the gaps)
+  [
+    ['cone',-2.4,-16],['cone',-0.8,-16],['cone',2.4,-26],['cone',0.8,-26],
+    ['trash',0.0,-35],['cone',-2.4,-44],['cone',2.4,-44],['cone',0.0,-52],
+    ['cone',-1.6,-60],['cone',1.6,-60],['trash',-2.2,-70],['trash',2.2,-70],
+    ['cone',0.0,-78],['cone',-2.4,-86],['cone',-0.8,-86],['cone',2.4,-96],
+    ['cone',0.8,-96],['trash',0.0,-104],['cone',-1.8,-112],['cone',1.8,-118],
+  ],
+  // Stage 4 – dense
+  [
+    ['cone',-2.4,-14],['cone',1.0,-20],['cone',-1.0,-26],['cone',2.4,-32],
+    ['trash',0.0,-39],['cone',-2.4,-46],['cone',-0.8,-46],['cone',2.4,-46],
+    ['cone',1.2,-54],['cone',-1.2,-60],['trash',2.0,-66],['cone',-2.2,-66],
+    ['cone',0.0,-73],['cone',-2.4,-80],['cone',0.8,-80],['cone',2.4,-87],
+    ['trash',-1.0,-94],['cone',1.5,-100],['cone',-1.5,-100],['cone',0.0,-107],
+    ['trash',2.0,-114],['cone',-2.0,-114],['cone',0.0,-121],
+  ],
+  // Stage 5 – pro line
+  [
+    ['cone',-2.4,-13],['cone',2.4,-13],['cone',0.0,-19],['cone',-1.4,-25],
+    ['cone',1.4,-31],['trash',0.0,-38],['cone',-2.4,-45],['cone',-0.8,-45],
+    ['cone',0.8,-45],['cone',2.4,-45],['cone',0.0,-53],['cone',-2.0,-60],
+    ['cone',2.0,-60],['trash',-1.2,-67],['trash',1.2,-67],['cone',0.0,-74],
+    ['cone',-2.4,-81],['cone',0.0,-81],['cone',2.4,-81],['cone',-1.5,-89],
+    ['cone',1.5,-95],['trash',0.0,-102],['cone',-2.2,-109],['cone',2.2,-109],
+    ['cone',-0.8,-116],['cone',1.0,-122],
+  ],
+];
+
+const obstacles=[];
+let currentStage=0;
+let stageSpeedBonus=0;
+function buildObstacles(){
+  obstacles.forEach(o=>scene.remove(o.group)); obstacles.length=0;
+  OBS_STAGES[currentStage].forEach(([type,x,z])=>{
+    const g=new THREE.Group();
+    if(type==='cone'){
+      const b=new THREE.Mesh(new THREE.ConeGeometry(.22,.68,8),new THREE.MeshLambertMaterial({color:0xf57f17}));
+      b.position.y=.34; b.castShadow=true; g.add(b);
+      const s=new THREE.Mesh(new THREE.CylinderGeometry(.235,.195,.12,8),new THREE.MeshLambertMaterial({color:0xffffff}));
+      s.position.y=.36; g.add(s);
+      const base=new THREE.Mesh(new THREE.CylinderGeometry(.32,.32,.07,8),new THREE.MeshLambertMaterial({color:0xf57f17}));
+      base.position.y=.035; base.castShadow=true; g.add(base);
+    } else {
+      const can=new THREE.Mesh(new THREE.CylinderGeometry(.28,.25,.85,8),new THREE.MeshLambertMaterial({color:0x757575}));
+      can.position.y=.425; can.castShadow=true; g.add(can);
+      const lid=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,.09,8),new THREE.MeshLambertMaterial({color:0x616161}));
+      lid.position.y=.895; g.add(lid);
+      const hdl=new THREE.Mesh(new THREE.BoxGeometry(.08,.04,.28),new THREE.MeshLambertMaterial({color:0x424242}));
+      hdl.position.set(0,.94,0); g.add(hdl);
+      const nub=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,.08,6),new THREE.MeshLambertMaterial({color:0x424242}));
+      nub.position.y=.96; g.add(nub);
+    }
+    g.position.set(x,0,z); scene.add(g);
+    obstacles.push({group:g,type,x:Number(x),z:Number(z),hit:false});
+  });
+}
+function setStage(i){ currentStage=i; stageSpeedBonus=i*1.3; buildObstacles(); }
+buildObstacles();
+
+// ── BRADY CHARACTER ──────────────────────────────────────────────────────────
+class BradyPlayer {
+  constructor(){
+    this.pos       = new THREE.Vector3(0,0,10);
+    this.yVel      = 0;
+    this.onGround  = true;
+    this.lean      = 0;
+    this.airTime   = 0;
+    this.trickLeft = false; this.trickRight = false;
+    this.justLanded= false;
+    this.stunTimer = 0;
+    this.facing    = Math.PI;  // face -z initially
+    this.walkPhase = 0;
+    this.stepTimer = 0;
+    this.mode      = 'walk';
+    this.parts     = {};
+    this.group     = new THREE.Group();
+    scene.add(this.group);
+    this._build();
+  }
+
+  _m(geo,col,x,y,z){
+    const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+    m.castShadow=true; m.receiveShadow=true;
+    m.position.set(x||0,y||0,z||0); return m;
+  }
+
+  _build(){
+    const BG=THREE.BoxGeometry, SG=THREE.SphereGeometry, CG=THREE.CylinderGeometry;
+
+    // Board group – hidden in walk mode
+    this.boardGroup = new THREE.Group();
+    const deck=this._m(new BG(.52,.07,1.18),0x5d4037,0,.245,0);
+    this.boardDeck=deck; this.boardGroup.add(deck);
+    [-0.45,0.45].forEach(tz=>{
+      this.boardGroup.add(this._m(new BG(.55,.06,.12),0x9e9e9e,0,.20,tz));
+    });
+    this.wheels=[];
+    [[-0.24,-0.44],[-0.24,0.44],[0.24,-0.44],[0.24,0.44]].forEach(([wx,wz])=>{
+      const w=this._m(new CG(.09,.09,.09,8),0x222222,wx,.09,wz);
+      w.rotation.z=Math.PI/2; this.boardGroup.add(w); this.wheels.push(w);
+    });
+    this.group.add(this.boardGroup);
+    this.boardGroup.visible=false;
+
+    // Body group – offset upward in run mode to sit on board
+    this.bodyGroup=new THREE.Group();
+    this.group.add(this.bodyGroup);
+
+    // Torso: orange hoodie
+    this.parts.torso=this._m(new BG(.52,.88,.36),0xef6c00,0,1.18,0);
+    this.bodyGroup.add(this.parts.torso);
+    this.bodyGroup.add(this._m(new BG(.28,.2,.04),0xe65100,0,.94,.19));
+    this.bodyGroup.add(this._m(new BG(.06,.7,.04),0xffd54f,0,1.14,.2));
+
+    // Head + helmet
+    this.parts.head=this._m(new BG(.4,.4,.38),0xffccaa,0,1.75,0);
+    this.bodyGroup.add(this.parts.head);
+    // Dirty blonde hair peeking out (bangs + side tufts under helmet)
+    this.bodyGroup.add(this._m(new BG(.42,.1,.06),0xb89651,0,1.92,.17));   // bangs
+    this.bodyGroup.add(this._m(new BG(.06,.16,.4),0xb89651,-.2,1.82,0));   // left sideburn
+    this.bodyGroup.add(this._m(new BG(.06,.16,.4),0xb89651, .2,1.82,0));   // right sideburn
+    this.bodyGroup.add(this._m(new BG(.42,.1,.42),0xb89651,0,1.88,-.02));  // back/under hair
+    const helm=new THREE.Mesh(new SG(.27,8,6),new THREE.MeshLambertMaterial({color:0xf57c00}));
+    helm.scale.set(1,.78,1); helm.castShadow=true; helm.position.set(0,1.99,0);
+    this.bodyGroup.add(helm);
+    this.bodyGroup.add(this._m(new BG(.54,.06,.12),0xef6c00,0,1.85,.18));
+    this.bodyGroup.add(this._m(new BG(.02,.24,.04),0x4e342e,-.18,1.75,.2));
+    this.bodyGroup.add(this._m(new BG(.02,.24,.04),0x4e342e, .18,1.75,.2));
+
+    // Eyes (blue)
+    this.bodyGroup.add(this._m(new BG(.1,.08,.04),0x1565c0,-.1,1.75,.2));
+    this.bodyGroup.add(this._m(new BG(.1,.08,.04),0x1565c0, .1,1.75,.2));
+
+    // Legs: hip pivot at y=0.79, shoe bottom at y=0 (bodyGroup origin)
+    this.parts.lLP=new THREE.Group(); this.parts.lLP.position.set(.13,.79,0);
+    this.parts.lLP.add(this._m(new BG(.22,.82,.28),0x1565c0,0,-.41,0));
+    this.parts.lLP.add(this._m(new BG(.22,.22,.3) ,0x212121,0,-.68,0));
+    this.bodyGroup.add(this.parts.lLP);
+
+    this.parts.rLP=new THREE.Group(); this.parts.rLP.position.set(-.13,.79,0);
+    this.parts.rLP.add(this._m(new BG(.22,.82,.28),0x1565c0,0,-.41,0));
+    this.parts.rLP.add(this._m(new BG(.22,.22,.3) ,0x212121,0,-.68,0));
+    this.bodyGroup.add(this.parts.rLP);
+
+    // Arms
+    this.parts.lAP=new THREE.Group(); this.parts.lAP.position.set(.35,1.54,0);
+    this.parts.lAP.add(this._m(new BG(.2,.74,.24),0xef6c00,0,-.37,0));
+    this.parts.lAP.add(this._m(new BG(.18,.22,.22),0xffcc80,0,-.78,0));
+    this.bodyGroup.add(this.parts.lAP);
+
+    this.parts.rAP=new THREE.Group(); this.parts.rAP.position.set(-.35,1.54,0);
+    this.parts.rAP.add(this._m(new BG(.2,.74,.24),0xef6c00,0,-.37,0));
+    this.parts.rAP.add(this._m(new BG(.18,.22,.22),0xffcc80,0,-.78,0));
+    this.bodyGroup.add(this.parts.rAP);
+  }
+
+  setMode(m){
+    this.mode=m;
+    this.boardGroup.visible=(m==='run');
+    if(m==='run'){
+      this.bodyGroup.position.y=.28;  // feet sit on board deck top
+      this.group.rotation.y=Math.PI;  // face direction of travel (-z)
+      this.group.rotation.z=0;
+    } else {
+      this.bodyGroup.position.y=0;
+      this.group.rotation.z=0;
+    }
+  }
+
+  // Walk phase: camera-relative WASD
+  updateWalk(dt, wk, camTheta){
+    let dx=0, dz=0;
+    const sinT=Math.sin(camTheta), cosT=Math.cos(camTheta);
+    if(wk.forward)  { dx-=sinT; dz-=cosT; }
+    if(wk.backward) { dx+=sinT; dz+=cosT; }
+    if(wk.left)     { dx-=cosT; dz+=sinT; }
+    if(wk.right)    { dx+=cosT; dz-=sinT; }
+    const len=Math.sqrt(dx*dx+dz*dz);
+    const moving=len>.01;
+    if(moving){ dx/=len; dz/=len; this.facing=Math.atan2(dx,dz); }
+    const spd=wk.sprint?6.5:3.8;
+    this.pos.x=Math.max(-3.5,Math.min(3.5, this.pos.x+dx*spd*dt));
+    this.pos.z=Math.max(-5,  Math.min(13,  this.pos.z+dz*spd*dt));
+    this.group.position.copy(this.pos);
+    this.group.rotation.y=this.facing;
+    this.group.rotation.z=0;
+    this._animWalk(dt,moving,wk.sprint);
+  }
+
+  _animWalk(dt,moving,sprint){
+    if(moving){
+      this.walkPhase+=dt*(sprint?9:6);
+      const s=Math.sin(this.walkPhase)*.7;
+      this.parts.lLP.rotation.x= s; this.parts.rLP.rotation.x=-s;
+      this.parts.lAP.rotation.x=-s*.5; this.parts.rAP.rotation.x=s*.5;
+      this.parts.lAP.rotation.z=.22;   this.parts.rAP.rotation.z=-.22;
+      this.stepTimer-=dt;
+      if(this.stepTimer<0){ playStep(); this.stepTimer=sprint?.17:.26; }
+    } else {
+      ['lLP','rLP','lAP','rAP'].forEach(k=>{ this.parts[k].rotation.x*=.85; });
+      this.parts.lAP.rotation.z*=.85; this.parts.rAP.rotation.z*=.85;
+      this.stepTimer=0;
+      this.parts.head.position.y=1.75+Math.sin(Date.now()*.0018)*.025;
+    }
+  }
+
+  // Run phase: auto-forward runner
+  updateRun(dt, inp, speed){
+    if(this.stunTimer>0){
+      this.stunTimer-=dt;
+      this.group.visible=Math.floor(this.stunTimer*12)%2===0;
+      // Bail pose: arms flung out, legs splayed
+      this.parts.lAP.rotation.z=1.4; this.parts.rAP.rotation.z=-1.4;
+      this.parts.lAP.rotation.x=-.7; this.parts.rAP.rotation.x=-.7;
+      this.parts.lLP.rotation.x=.6;  this.parts.rLP.rotation.x=.6;
+      this.bodyGroup.rotation.x=.25;
+      this.group.position.copy(this.pos);
+      return;
+    }
+    this.group.visible=true;
+
+    let steer=0;
+    if(inp.left)  steer=-1;
+    if(inp.right) steer= 1;
+    this.pos.x=Math.max(-2.9,Math.min(2.9, this.pos.x+steer*5.5*dt));
+    this.pos.z-=speed*dt;
+
+    if(inp.jump && this.onGround){
+      this.yVel=5.5; this.onGround=false;
+      this.airTime=0; this.trickLeft=false; this.trickRight=false;
+      this.justLanded=false; playOllie();
+    }
+    if(!this.onGround){
+      if(inp.left)  this.trickLeft=true;
+      if(inp.right) this.trickRight=true;
+      this.yVel-=16*dt; this.airTime+=dt;
+      this.pos.y+=this.yVel*dt;
+      if(this.pos.y<=0){
+        this.pos.y=0; this.yVel=0; this.onGround=true;
+        this.justLanded=true;
+        this.boardDeck.rotation.z=0;
+        if(this.airTime>.1) playLand();
+      }
+    }
+
+    this.lean+=(steer*.28-this.lean)*9*dt;
+    const tilt=this.onGround?0:Math.min(.6,this.airTime*1.8);
+    const speedRatio=Math.max(0,(speed-START_SPD)/(MAX_SPD-START_SPD));
+
+    this.group.position.copy(this.pos);
+    this.group.rotation.y=Math.PI;
+    this.group.rotation.z=-this.lean;
+    this.bodyGroup.rotation.x=-0.08-speedRatio*0.14; // forward lean into speed
+    this.boardDeck.rotation.x=tilt;
+    // Board flips during tricks
+    if(!this.onGround){
+      if(this.trickLeft&&this.trickRight) this.boardDeck.rotation.z+=dt*12;
+      else if(this.trickLeft)  this.boardDeck.rotation.z+=dt*8;
+      else if(this.trickRight) this.boardDeck.rotation.z-=dt*8;
+    } else {
+      this.boardDeck.rotation.z*=0.7;
+    }
+
+    const wspd=speed*dt*3;
+    this.wheels.forEach(w=>w.rotation.x+=wspd);
+
+    const air=!this.onGround;
+    const tLz= air? .7:steer<0? .55:.22;
+    const tRz= air?-.7:steer>0?-.55:-.22;
+    this.parts.lAP.rotation.z+=(tLz-this.parts.lAP.rotation.z)*10*dt;
+    this.parts.rAP.rotation.z+=(tRz-this.parts.rAP.rotation.z)*10*dt;
+    this.parts.lAP.rotation.x+=((air?-.3:0)-this.parts.lAP.rotation.x)*8*dt;
+    this.parts.rAP.rotation.x+=((air?-.3:0)-this.parts.rAP.rotation.x)*8*dt;
+    this.parts.lLP.rotation.x=air?.55:-.2;
+    this.parts.rLP.rotation.x=air?.55:-.2;
+  }
+
+  stun(){
+    this.stunTimer=.65; this.onGround=true; this.yVel=0; this.pos.y=0;
+    this.boardDeck.rotation.z=0;
+  }
+}
+
+const player=new BradyPlayer();
+
+// ── BOARD PROP (walk phase) ───────────────────────────────────────────────────
+let boardPropGroup, boardGlow;
+(function buildBoardProp(){
+  const g=new THREE.Group();
+  const pd=new THREE.Mesh(new THREE.BoxGeometry(.52,.07,1.18),new THREE.MeshLambertMaterial({color:0x5d4037}));
+  pd.position.y=.245; pd.castShadow=true; g.add(pd);
+  [-0.45,0.45].forEach(tz=>{
+    const tr=new THREE.Mesh(new THREE.BoxGeometry(.55,.06,.12),new THREE.MeshLambertMaterial({color:0x9e9e9e}));
+    tr.position.set(0,.20,tz); g.add(tr);
+  });
+  [[-0.24,-0.44],[-0.24,0.44],[0.24,-0.44],[0.24,0.44]].forEach(([wx,wz])=>{
+    const w=new THREE.Mesh(new THREE.CylinderGeometry(.09,.09,.09,8),new THREE.MeshLambertMaterial({color:0x222222}));
+    w.rotation.z=Math.PI/2; w.position.set(wx,.09,wz); w.castShadow=true; g.add(w);
+  });
+  boardGlow=new THREE.Mesh(
+    new THREE.RingGeometry(.7,.95,32),
+    new THREE.MeshLambertMaterial({color:0xf57c00,side:THREE.DoubleSide,transparent:true,opacity:.5})
+  );
+  boardGlow.rotation.x=-Math.PI/2; boardGlow.position.y=.005; g.add(boardGlow);
+  g.position.copy(BOARD_POS);
+  scene.add(g);
+  boardPropGroup=g;
+})();
+
+// ── GAME STATE ────────────────────────────────────────────────────────────────
+let gamePhase='walk';
+let levelActive=false, finished=false;
+let speed=START_SPD, elapsed=0;
+let score=0, combo=1, tricksLanded=0, bails=0;
+let trickTimer=0, comboTimer=0;
+let jumpConsumed=false;
+
+function updateBailDisplay(){
+  for(let i=0;i<MAX_BAILS;i++){
+    const el=document.getElementById('bail'+i);
+    if(el) el.className='bail-icon'+(i<bails?' used':'');
+  }
+}
+
+// ── TRICK / COMBO UI ─────────────────────────────────────────────────────────
+const trickEl=document.getElementById('trick-flash');
+const comboEl=document.getElementById('combo-text');
+
+function showTrick(name,col){
+  trickEl.textContent=name; trickEl.style.color=col||'#ffe082';
+  trickEl.style.opacity='1'; trickTimer=1.0;
+}
+
+function checkTrickOnLand(){
+  if(!player.justLanded||player.airTime<.12) return;
+  const l=player.trickLeft, r=player.trickRight;
+  let name,pts;
+  if(l&&r)    { name='360 FLIP!'; pts=100; }
+  else if(l)  { name='HEELFLIP!'; pts=50; }
+  else if(r)  { name='KICKFLIP!'; pts=50; }
+  else        { name='OLLIE!';    pts=10; }
+  score+=pts*combo; tricksLanded++;
+  combo=Math.min(combo+1,8);
+  comboEl.textContent='COMBO x'+combo; comboEl.style.opacity='1'; comboTimer=1.2;
+  showTrick(name,pts>=100?'#ff6090':pts>=50?'#ffe082':'#fff');
+  playTrick(); player.justLanded=false; updateHud();
+}
+
+// ── COLLISION ────────────────────────────────────────────────────────────────
+function checkCollisions(){
+  obstacles.forEach(obs=>{
+    if(obs.hit) return;
+    const dz=Math.abs(player.pos.z-obs.z);
+    const dx=Math.abs(player.pos.x-obs.x);
+    const clearH=obs.type==='cone'?.42:.68;
+    if(dz<1.1&&dx<0.68&&player.pos.y<clearH){
+      obs.hit=true; player.stun();
+      combo=1; bails++;
+      showTrick('BAILED!','#ef9a9a');
+      comboEl.style.opacity='0';
+      playHit(); updateHud(); updateBailDisplay();
+      if(bails>=MAX_BAILS) failLevel();
+    }
+  });
+}
+
+// ── HUD ──────────────────────────────────────────────────────────────────────
+function updateHud(){
+  document.getElementById('score-badge').textContent='Score: '+score;
+  document.getElementById('combo-badge').textContent='Combo: x'+combo;
+  document.getElementById('speed-badge').textContent='Speed: '+speed.toFixed(1)+'m/s';
+  const pct=Math.max(0,Math.min(100,((-player.pos.z)/Math.abs(FINISH_Z))*100));
+  document.getElementById('prog-fill').style.width=pct+'%';
+  document.getElementById('prog-label').textContent=
+    pct>=100?'FINISH!':Math.round(Math.abs(FINISH_Z)+player.pos.z)+'m TO GO!';
+}
+
+// ── WIN / FAIL / RESET ───────────────────────────────────────────────────────
+function saveStars(lvl,s){
+  const k='tuck_stars_'+lvl;
+  if(s>parseInt(localStorage.getItem(k)||'0')) localStorage.setItem(k,String(s));
+  if(window.Ach) Ach.check();
+  const el=document.getElementById('win-stars-earned');
+  if(el) el.textContent='★'.repeat(s)+'☆'.repeat(3-s);
+}
+function winLevel(){
+  finished=true;
+  document.getElementById('win-score').textContent='Final Score: '+score;
+  document.getElementById('win-tricks').textContent='Tricks landed: '+tricksLanded;
+  document.getElementById('win-bails').textContent='Bails: '+bails+' / '+MAX_BAILS;
+  const last=currentStage>=OBS_STAGES.length-1;
+  const nextBtn=document.getElementById('next-btn');
+  const winTitle=document.querySelector('.win-title');
+  if(last){
+    winTitle.textContent='🛹 SHREDDED IT!';
+    nextBtn.textContent='⌂ Menu';
+    nextBtn.dataset.action='menu';
+    saveStars(4, bails===0?3:bails<=1?2:1);
+  }else{
+    winTitle.textContent=`🛹 RUN ${currentStage+1} DONE!`;
+    nextBtn.textContent='Next Run →';
+    nextBtn.dataset.action='next';
+    document.getElementById('win-stars-earned').textContent=`Run ${currentStage+1} / ${OBS_STAGES.length}`;
+  }
+  document.getElementById('win').style.display='flex';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('prog-wrap').style.display='none';
+  document.getElementById('bail-display').style.display='none';
+  playFinish();
+}
+
+function failLevel(){
+  finished=true;
+  document.getElementById('fail-stat').textContent='You bailed '+bails+' times — run over!';
+  document.getElementById('fail').style.display='flex';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('prog-wrap').style.display='none';
+  document.getElementById('bail-display').style.display='none';
+}
+
+function resetLevel(){
+  document.getElementById('win').style.display='none';
+  document.getElementById('fail').style.display='none';
+  document.getElementById('approach-hint').style.display='none';
+  score=0; combo=1; tricksLanded=0; bails=0;
+  elapsed=0; speed=START_SPD; finished=false;
+  player.pos.set(0,0,10);
+  player.yVel=0; player.onGround=true;
+  player.lean=0; player.stunTimer=0;
+  player.justLanded=false; player.trickLeft=false; player.trickRight=false;
+  player.group.visible=true;
+  player.facing=Math.PI;
+  player.group.rotation.set(0,Math.PI,0);
+  player.setMode('walk');
+  boardPropGroup.visible=true;
+  obstacles.forEach(o=>o.hit=false);
+  trickEl.style.opacity='0'; comboEl.style.opacity='0';
+  document.getElementById('prog-fill').style.width='0%';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('prog-wrap').style.display='none';
+  document.getElementById('bail-display').style.display='none';
+  updateBailDisplay();
+  gamePhase='walk';
+}
+
+function startSkating(){
+  boardPropGroup.visible=false;
+  player.pos.set(BOARD_POS.x,0,BOARD_POS.z);
+  player.yVel=0; player.onGround=true;
+  player.lean=0; player.stunTimer=0;
+  player.justLanded=false; player.trickLeft=false; player.trickRight=false;
+  player.setMode('run');
+  gamePhase='run';
+  document.getElementById('approach-hint').style.display='none';
+  document.getElementById('hud').style.display='flex';
+  document.getElementById('prog-wrap').style.display='flex';
+  document.getElementById('bail-display').style.display='flex';
+  updateBailDisplay();
+}
+
+// ── CAMERA ───────────────────────────────────────────────────────────────────
+let camTheta=0, camPhi=.35;
+const CAM_DIST=9;
+let rmbDown=false, lastMX=0, lastMY=0;
+
+canvas3d.addEventListener('contextmenu',e=>e.preventDefault());
+canvas3d.addEventListener('mousedown',e=>{
+  if(e.button===2){ rmbDown=true; lastMX=e.clientX; lastMY=e.clientY; }
+});
+window.addEventListener('mouseup',e=>{ if(e.button===2) rmbDown=false; });
+window.addEventListener('mousemove',e=>{
+  if(!rmbDown) return;
+  camTheta-=(e.clientX-lastMX)*.005;
+  camPhi  -=(e.clientY-lastMY)*.005;
+  camPhi=Math.max(.08,Math.min(1.2,camPhi));
+  lastMX=e.clientX; lastMY=e.clientY;
+});
+
+const camWant=new THREE.Vector3();
+const camLookAt=new THREE.Vector3();
+const camLookTmp=new THREE.Vector3();
+const camTgt=new THREE.Vector3();
+
+function updateCameraWalk(dt){
+  const px=player.pos.x, py=player.pos.y+1.1, pz=player.pos.z;
+  camWant.set(
+    px+Math.sin(camTheta)*Math.cos(camPhi)*CAM_DIST,
+    py+Math.sin(camPhi)*CAM_DIST,
+    pz+Math.cos(camTheta)*Math.cos(camPhi)*CAM_DIST
+  );
+  const a=1-Math.pow(.005,dt);
+  camera.position.lerp(camWant,a);
+  camLookTmp.set(px,py,pz);
+  camLookAt.lerp(camLookTmp,a);
+  camera.lookAt(camLookAt);
+}
+
+function updateCameraRun(dt){
+  camTgt.set(player.pos.x*.45, player.pos.y+3.2, player.pos.z+6.5);
+  camera.position.lerp(camTgt,1-Math.pow(.005,dt));
+  camera.lookAt(player.pos.x*.25, player.pos.y+.6, player.pos.z-4);
+}
+
+// ── INPUT ────────────────────────────────────────────────────────────────────
+const walkKeys={forward:false,backward:false,left:false,right:false,sprint:false};
+const runKeys ={left:false,right:false,jump:false};
+
+function distToBoard(){
+  return Math.sqrt(
+    Math.pow(player.pos.x-BOARD_POS.x,2)+
+    Math.pow(player.pos.z-BOARD_POS.z,2)
+  );
+}
+
+document.addEventListener('keydown',e=>{
+  if(!levelActive) return;
+  if(gamePhase==='run'){
+    switch(e.code){
+      case'KeyA':case'ArrowLeft':  runKeys.left=true;  break;
+      case'KeyD':case'ArrowRight': runKeys.right=true; break;
+      case'Space': e.preventDefault();
+        if(!jumpConsumed){ runKeys.jump=true; jumpConsumed=true; } break;
+    }
+    return;
+  }
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    walkKeys.forward=true;  break;
+    case'KeyS':case'ArrowDown':  walkKeys.backward=true; break;
+    case'KeyA':case'ArrowLeft':  walkKeys.left=true;     break;
+    case'KeyD':case'ArrowRight': walkKeys.right=true;    break;
+    case'ShiftLeft':case'ShiftRight': walkKeys.sprint=true; break;
+    case'KeyE':
+      if(!finished && distToBoard()<2.5) startSkating(); break;
+  }
+});
+
+document.addEventListener('keyup',e=>{
+  if(gamePhase==='run'){
+    switch(e.code){
+      case'KeyA':case'ArrowLeft':  runKeys.left=false;  break;
+      case'KeyD':case'ArrowRight': runKeys.right=false; break;
+      case'Space': runKeys.jump=false; jumpConsumed=false; break;
+    }
+    return;
+  }
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    walkKeys.forward=false;  break;
+    case'KeyS':case'ArrowDown':  walkKeys.backward=false; break;
+    case'KeyA':case'ArrowLeft':  walkKeys.left=false;     break;
+    case'KeyD':case'ArrowRight': walkKeys.right=false;    break;
+    case'ShiftLeft':case'ShiftRight': walkKeys.sprint=false; break;
+  }
+});
+
+// ── INTRO / DOM ───────────────────────────────────────────────────────────────
+const introEl=document.getElementById('intro');
+const approachEl=document.getElementById('approach-hint');
+
+function startLevel(){
+  introEl.style.display='none';
+  levelActive=true;
+  audioCtx.resume();
+}
+
+document.getElementById('intro-btn').addEventListener('click',startLevel);
+document.getElementById('replay-btn').addEventListener('click',resetLevel);
+document.getElementById('retry-btn').addEventListener('click',resetLevel);
+document.getElementById('next-btn').addEventListener('click',()=>{
+  if(document.getElementById('next-btn').dataset.action==='next'){
+    setStage(currentStage+1);
+    resetLevel();
+    startLevel();
+  }else{
+    window.location.href='index.html';
+  }
+});
+document.getElementById('fail-menu-btn').addEventListener('click',()=>window.location.href='index.html');
+
+// ── GAME LOOP ─────────────────────────────────────────────────────────────────
+let prev=performance.now();
+
+function tick(){
+  requestAnimationFrame(tick);
+  const now=performance.now(), dt=Math.min((now-prev)/1000,.05); prev=now;
+
+  if(levelActive && gamePhase==='walk'){
+    player.updateWalk(dt,walkKeys,camTheta);
+    const near=distToBoard()<2.5;
+    approachEl.style.display=near?'block':'none';
+    if(boardPropGroup.visible){
+      boardGlow.material.opacity=.3+.3*Math.sin(Date.now()*.003);
+    }
+    updateCameraWalk(dt);
+  } else if(levelActive && gamePhase==='run' && !finished){
+    elapsed+=dt;
+    speed=Math.min(MAX_SPD+stageSpeedBonus,START_SPD+stageSpeedBonus+elapsed*ACCEL);
+    const inp={left:runKeys.left,right:runKeys.right,jump:runKeys.jump};
+    runKeys.jump=false;
+    player.updateRun(dt,inp,speed);
+    checkCollisions();
+    checkTrickOnLand();
+    updateHud();
+    trickTimer-=dt; if(trickTimer<=0) trickEl.style.opacity='0';
+    comboTimer-=dt; if(comboTimer<=0) comboEl.style.opacity='0';
+    if(player.pos.z<=FINISH_Z) winLevel();
+    updateCameraRun(dt);
+  } else if(gamePhase==='run'){
+    updateCameraRun(dt);
+  } else {
+    updateCameraWalk(dt);
+  }
+
+  renderer.render(scene,camera);
+}
+
+tick();
+
+// ── Mobile touch controls ──
+if(Mobile.ready){
+  Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.button({label:'RIDE',code:'KeyE'});
+  Mobile.button({label:'JUMP',code:'Space'});
+}
+</script>
+</body>
+</html>

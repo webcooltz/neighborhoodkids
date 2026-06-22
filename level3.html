@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neighborhood Kids – Marshall</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; overflow:hidden; font-family:'Arial Rounded MT Bold',Arial,sans-serif; }
+canvas#c { display:block; width:100vw; height:100vh; }
+
+#intro {
+  position:fixed; inset:0; background:rgba(5,5,20,.92);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; z-index:100;
+}
+.lvl-tag  { color:#ce93d8; font-size:13px; letter-spacing:4px; text-transform:uppercase; }
+.lvl-name { color:#fff; font-size:62px; font-weight:900; letter-spacing:6px; text-transform:uppercase; }
+.lvl-desc { color:rgba(255,255,255,.6); font-size:15px; text-align:center; max-width:420px; line-height:1.7; }
+#intro-btn {
+  margin-top:10px; padding:14px 48px; font-size:18px; font-weight:bold;
+  background:#7b1fa2; color:#fff; border:none; border-radius:30px;
+  cursor:pointer; letter-spacing:2px; text-transform:uppercase;
+  box-shadow:0 4px 16px rgba(123,31,162,.6); transition:transform .1s;
+}
+#intro-btn:hover { transform:scale(1.05); }
+
+#hud {
+  position:fixed; top:14px; right:16px; display:none;
+  flex-direction:column; gap:6px; align-items:flex-end;
+}
+.badge { background:rgba(0,0,0,.6); color:#fff; padding:4px 12px; border-radius:20px; font-size:13px; letter-spacing:1px; }
+
+#approach-hint {
+  position:fixed; bottom:60px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,.75); color:#e1bee7; padding:8px 24px;
+  border-radius:20px; font-size:14px; letter-spacing:1px; display:none; white-space:nowrap;
+}
+
+#win, #fail {
+  position:fixed; inset:0; display:none;
+  flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; z-index:100;
+}
+#win  { background:rgba(5,5,20,.92); }
+#fail { background:rgba(20,5,5,.92); }
+.win-title  { color:#ce93d8; font-size:52px; font-weight:900; letter-spacing:4px; }
+.fail-title { color:#ef9a9a; font-size:52px; font-weight:900; letter-spacing:4px; }
+.win-stat   { color:rgba(255,255,255,.75); font-size:16px; }
+.win-btns   { display:flex; gap:12px; margin-top:8px; }
+.win-btn    { padding:12px 36px; font-size:15px; font-weight:bold; letter-spacing:2px;
+              text-transform:uppercase; border:none; border-radius:24px; cursor:pointer; }
+.win-btn.primary   { background:#7b1fa2; color:#fff; }
+.win-btn.secondary { background:rgba(255,255,255,.12); color:#fff; }
+
+/* ── Note highway overlay ── */
+#highway-overlay {
+  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  z-index:50; background:rgba(0,0,0,.6); pointer-events:none;
+}
+#highway-canvas { border-radius:12px; pointer-events:none; }
+
+/* ── Key buttons (visual only) ── */
+#key-flash {
+  position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+  display:none; gap:10px; z-index:60; pointer-events:none;
+}
+.key-btn {
+  width:68px; height:68px; border-radius:12px; font-size:18px; font-weight:900;
+  display:flex; align-items:center; justify-content:center; color:#fff;
+  border:3px solid rgba(255,255,255,.25); transition:filter .04s,transform .04s;
+  user-select:none;
+}
+.key-btn[data-lane="0"] { background:rgba(220,50,50,.65); }
+.key-btn[data-lane="1"] { background:rgba(220,180,30,.65); }
+.key-btn[data-lane="2"] { background:rgba(30,140,220,.65); }
+.key-btn[data-lane="3"] { background:rgba(50,200,80,.65); }
+.key-btn.lit { filter:brightness(2); transform:scale(1.12); border-color:rgba(255,255,255,.7); }
+
+/* ── Hit feedback text ── */
+#feedback {
+  position:fixed; top:38%; left:50%; transform:translate(-50%,-50%);
+  font-size:28px; font-weight:900; letter-spacing:4px; pointer-events:none;
+  z-index:70; opacity:0; transition:opacity .08s;
+}
+
+#instr {
+  position:fixed; bottom:16px; left:16px;
+  color:rgba(255,255,255,.4); font-size:12px; line-height:1.8; letter-spacing:1px;
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="intro">
+  <div class="lvl-tag">Level 03</div>
+  <div class="lvl-name">MARSHALL</div>
+  <div class="lvl-desc">Marshall's been practicing violin all summer long.<br>Walk up to the stand and play — 5 songs, each harder!</div>
+  <button id="intro-btn">LET'S GO!</button>
+</div>
+
+<div id="hud">
+  <div class="badge" id="score-badge">Score: 0</div>
+  <div class="badge" id="combo-badge">Combo: 0x</div>
+  <div class="badge" id="acc-badge">Acc: —</div>
+</div>
+
+<div id="approach-hint">Press <b>E</b> to play violin</div>
+
+<div id="highway-overlay">
+  <canvas id="highway-canvas" width="360" height="520"></canvas>
+</div>
+
+<div id="key-flash">
+  <div class="key-btn" data-lane="0">A</div>
+  <div class="key-btn" data-lane="1">S</div>
+  <div class="key-btn" data-lane="2">D</div>
+  <div class="key-btn" data-lane="3">F</div>
+</div>
+
+<div id="feedback"></div>
+
+<div id="win">
+  <div class="win-title">🎻 BRAVO!</div>
+  <div class="win-stat" id="win-score"></div>
+  <div class="win-stat" id="win-acc"></div>
+  <div id="win-stars-earned" style="font-size:38px;color:#ffd54f;letter-spacing:8px;margin:6px 0"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="replay-btn">Play Again</button>
+    <button class="win-btn secondary" id="next-btn">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="fail">
+  <div class="fail-title">😬 KEEP PRACTICING</div>
+  <div class="win-stat" id="fail-acc"></div>
+  <div class="win-btns">
+    <button class="win-btn primary"   id="retry-btn">Try Again</button>
+    <button class="win-btn secondary" id="fail-menu-btn">⌂ Menu</button>
+  </div>
+</div>
+
+<div id="instr">WASD move · Shift sprint · E play violin<br>During song: A S D F hit notes</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="mobile.js"></script>
+<script src="achievements.js"></script>
+<script>
+'use strict';
+
+// ─── AUDIO ────────────────────────────────────────────────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+const LANE_FREQ  = [196, 293.66, 440, 659.25]; // G D A E violin strings
+const LANE_COLS  = ['#e53935','#fdd835','#1e88e5','#43a047'];
+const LANE_KEYS  = ['A','S','D','F'];
+const LANE_NAMES = ['G','D','A','E'];
+
+function playNote(lane){
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filt = audioCtx.createBiquadFilter();
+  filt.type = 'lowpass'; filt.frequency.value = 2600;
+  osc.type = 'sawtooth';
+  osc.frequency.value = LANE_FREQ[lane];
+  osc.connect(filt); filt.connect(gain); gain.connect(audioCtx.destination);
+  const t = audioCtx.currentTime;
+  gain.gain.setValueAtTime(0.22, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+  osc.start(t); osc.stop(t + 0.42);
+}
+
+function playMiss(){
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'square'; osc.frequency.value = 90;
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  const t = audioCtx.currentTime;
+  gain.gain.setValueAtTime(0.07, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+  osc.start(t); osc.stop(t + 0.15);
+}
+
+function playWin(){
+  [440,554,659,880,1109].forEach((f,i)=>{
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.value=f;
+    o.connect(g); g.connect(audioCtx.destination);
+    const t=audioCtx.currentTime+i*.14;
+    g.gain.setValueAtTime(.18,t); g.gain.exponentialRampToValueAtTime(.001,t+.5);
+    o.start(t); o.stop(t+.55);
+  });
+}
+
+// ─── SONG ─────────────────────────────────────────────────────────────────────
+// {l: lane 0-3, t: hit time in seconds from song start}
+const SONG1 = [
+  {l:0,t:1.0},{l:2,t:1.5},
+  {l:1,t:2.0},{l:3,t:2.5},
+  {l:0,t:3.0},{l:2,t:3.5},
+  {l:3,t:4.0},{l:1,t:4.5},
+  {l:0,t:5.0},{l:2,t:5.5},
+  {l:1,t:6.0},{l:3,t:6.5},
+  {l:0,t:7.0},{l:0,t:7.5},
+  {l:2,t:8.0},{l:3,t:8.0},
+  {l:1,t:8.5},{l:3,t:9.0},
+  {l:2,t:9.5},{l:0,t:10.0},
+  {l:1,t:10.5},{l:2,t:11.0},
+  {l:3,t:11.5},{l:0,t:12.0},
+  {l:1,t:12.5},{l:3,t:13.0},
+  {l:0,t:13.5},{l:2,t:14.0},
+  {l:1,t:14.5},{l:3,t:15.0},
+  {l:0,t:15.5},{l:2,t:16.0},
+];
+
+// Build a song from a lane sequence. Array entry = chord (multiple lanes), null = rest.
+function buildSong(seq, step, t0){
+  const notes=[]; let t=t0;
+  for(const item of seq){
+    if(Array.isArray(item)) item.forEach(l=>notes.push({l,t}));
+    else if(item!==null) notes.push({l:item,t});
+    t+=step;
+  }
+  return notes;
+}
+
+const SONGS = [
+  { notes: SONG1, end: 17.5 },
+  { notes: buildSong([0,2,1,3, 2,0,3,1, 0,1,2,3, 3,2,1,0, 0,2,1,3, 2,3,0,1], 0.5, 1.0), end: 14.5 },
+  { notes: buildSong([0,2,[1,3],null, 2,0,3,1, [0,2],1,3,2, 0,3,1,[2,3], 0,1,2,3, [0,1],2,3,0], 0.45, 1.0), end: 13.4 },
+  { notes: buildSong([0,1,2,3, 3,2,1,0, [0,3],1,2,[1,2], 0,2,1,3, 2,0,3,1, 0,1,2,3, [0,2],[1,3]], 0.4, 1.0), end: 13.0 },
+  { notes: buildSong([0,2,1,3,2,0,3,1, [0,1],2,3,[2,3], 0,1,2,3, 3,2,1,0, [0,3],1,2,[1,2], 0,2,1,3, [0,1,2,3]], 0.35, 1.0), end: 12.8 },
+];
+
+let currentStage = 0;
+let SONG     = SONGS[0].notes;
+let SONG_END = SONGS[0].end;
+function setStage(i){ currentStage=i; SONG=SONGS[i].notes; SONG_END=SONGS[i].end; }
+
+const WIN_THRESHOLD = 0.55; // 55% accuracy required
+
+// ─── THREE.JS ─────────────────────────────────────────────────────────────────
+const canvas3d = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas:canvas3d, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x160a28);
+scene.fog = new THREE.Fog(0x160a28,20,38);
+
+const camera = new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,100);
+camera.position.set(0,4,9);
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// Lights
+scene.add(new THREE.AmbientLight(0x9966cc,.55));
+const sun=new THREE.DirectionalLight(0xffeedd,1.1);
+sun.position.set(5,10,4); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+['left','right','top','bottom'].forEach((s,i)=>{sun.shadow.camera[s]=[-15,15,15,-15][i];});
+sun.shadow.camera.far=40; scene.add(sun);
+
+const spot=new THREE.SpotLight(0xce93d8,2.5,22,Math.PI*.22,.5,1);
+spot.position.set(0,8,-1); spot.target.position.set(0,0,0);
+scene.add(spot); scene.add(spot.target);
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function M(geo,col,rx=0,ry=0,rz=0){
+  const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+  m.castShadow=true; m.receiveShadow=true;
+  m.rotation.set(rx,ry,rz); return m;
+}
+
+// ─── ROOM ─────────────────────────────────────────────────────────────────────
+(function buildRoom(){
+  // Floor
+  const fl=M(new THREE.PlaneGeometry(24,20),0x5d4037,-Math.PI/2);
+  fl.castShadow=false; scene.add(fl);
+  // Planks
+  for(let z=-9;z<10;z+=1.15){
+    const pk=M(new THREE.BoxGeometry(24,.012,.9),0x4e342e);
+    pk.position.set(0,.006,z); pk.castShadow=false; scene.add(pk);
+  }
+  // Back wall
+  const bw=M(new THREE.BoxGeometry(24,.01,11),0xb39ddb,Math.PI/2);
+  bw.position.set(0,5.5,-10); bw.castShadow=false; scene.add(bw);
+  // Side walls
+  const lw=M(new THREE.BoxGeometry(.01,11,20),0x9575cd);
+  lw.position.set(-12,5.5,0); lw.castShadow=false; scene.add(lw);
+  const rw=lw.clone(); rw.position.x=12; scene.add(rw);
+  // Ceiling
+  const cw=M(new THREE.PlaneGeometry(24,20),0x311b92,Math.PI/2);
+  cw.position.y=11; cw.castShadow=false; scene.add(cw);
+
+  // Bed (right corner)
+  const bf=M(new THREE.BoxGeometry(4.2,.52,6.2),0x4e342e);
+  bf.position.set(7.5,.26,-6.8); scene.add(bf);
+  const mt=M(new THREE.BoxGeometry(3.9,.42,5.9),0xf48fb1);
+  mt.position.set(7.5,.68,-6.8); scene.add(mt);
+  const pl=M(new THREE.BoxGeometry(1.7,.28,1.3),0xfff9c4);
+  pl.position.set(7.5,.9,-9.0); scene.add(pl);
+  const hb=M(new THREE.BoxGeometry(4.2,2,.22),0x4e342e);
+  hb.position.set(7.5,1.2,-9.1); scene.add(hb);
+
+  // Desk (left)
+  const dt=M(new THREE.BoxGeometry(3.6,.14,1.9),0x795548);
+  dt.position.set(-7.5,2.52,-8.5); scene.add(dt);
+  [[-1.6,1.25,-7.6],[-1.6,1.25,-9.4],[1.6,1.25,-7.6],[1.6,1.25,-9.4]].forEach(([x,y,z])=>{
+    const leg=M(new THREE.BoxGeometry(.12,2.52,.12),0x5d4037);
+    leg.position.set(-7.5+x,y,z); scene.add(leg);
+  });
+  const lp=M(new THREE.BoxGeometry(1.3,.06,1.05),0x212121);
+  lp.position.set(-7.5,2.6,-8.5); scene.add(lp);
+
+  // Posters (back wall)
+  [[3,4,-9.96,0x880e4f,2.2,3.5],[3,4,-9.92,0xce93d8,2,3.2],
+   [-4,3.5,-9.96,0x1565c0,1.8,2.8],[-4,3.5,-9.92,0x90caf9,1.6,2.5]].forEach(([x,y,z,c,w,h])=>{
+    const p=M(new THREE.BoxGeometry(w,h,.04),c);
+    p.position.set(x,y,z); scene.add(p);
+  });
+
+  // Amp (left wall)
+  const amp=M(new THREE.BoxGeometry(2,2,1.4),0x212121);
+  amp.position.set(-9.5,1,-1.5); scene.add(amp);
+  const gr=M(new THREE.BoxGeometry(1.6,1.4,.08),0x424242);
+  gr.position.set(-9.5,1,-.8); scene.add(gr);
+  const sp=M(new THREE.CylinderGeometry(.42,.42,.06,20),0x616161,-Math.PI/2);
+  sp.rotation.x=Math.PI/2; sp.position.set(-9.5,1,-.73); scene.add(sp);
+
+  // Trophy shelf (back-right)
+  const sh=M(new THREE.BoxGeometry(3,.1,0.5),0x8d6e63);
+  sh.position.set(8,5,-9.74); scene.add(sh);
+  [-.9,0,.9].forEach((dx,i)=>{
+    const tr=M(new THREE.CylinderGeometry(.08,.13,.55,8),0xffd700);
+    tr.position.set(8+dx,5.35,-9.74); scene.add(tr);
+    const top=M(new THREE.SphereGeometry(.1,8,6),0xffd700);
+    top.position.set(8+dx,5.65,-9.74); scene.add(top);
+  });
+})();
+
+// ─── VIOLIN STAND ─────────────────────────────────────────────────────────────
+const VIOLIN_POS = new THREE.Vector3(0,0,0);
+let glowRing;
+
+(function buildViolinStand(){
+  const g = new THREE.Group();
+
+  // Stand pole
+  const pole=M(new THREE.CylinderGeometry(.042,.042,1.45,8),0x8d6e63);
+  pole.position.y=.72; g.add(pole);
+  // Base legs
+  for(let i=0;i<3;i++){
+    const a=i*Math.PI*2/3;
+    const leg=new THREE.Mesh(
+      new THREE.CylinderGeometry(.025,.025,.55,6),
+      new THREE.MeshLambertMaterial({color:0x8d6e63})
+    );
+    leg.castShadow=true;
+    leg.position.set(Math.sin(a)*.3,.16,Math.cos(a)*.3);
+    leg.rotation.x=.38; leg.rotation.y=a;
+    g.add(leg);
+  }
+
+  // Violin body (two flattened spheres for figure-8)
+  const vmat=new THREE.MeshLambertMaterial({color:0x5d2900});
+  const vTop=new THREE.Mesh(new THREE.SphereGeometry(.21,10,8),vmat);
+  vTop.scale.set(1,1.7,.22); vTop.position.set(0,1.72,0); vTop.castShadow=true; g.add(vTop);
+  const vBot=new THREE.Mesh(new THREE.SphereGeometry(.26,10,8),vmat);
+  vBot.scale.set(1,1.9,.22); vBot.position.set(0,1.25,0); vBot.castShadow=true; g.add(vBot);
+  // Waist indent (dark strip)
+  const waist=M(new THREE.BoxGeometry(.28,.22,.06),0x3e1a00);
+  waist.position.set(0,1.5,0); g.add(waist);
+  // Neck
+  const neck=M(new THREE.BoxGeometry(.09,.58,.055),0x3e1a00);
+  neck.position.set(0,2.1,0); g.add(neck);
+  const scroll=M(new THREE.CylinderGeometry(.065,.04,.11,8),0x3e1a00);
+  scroll.position.set(0,2.42,0); g.add(scroll);
+  // Strings
+  for(let i=0;i<4;i++){
+    const sx=(i-1.5)*.022;
+    const s=M(new THREE.CylinderGeometry(.005,.005,.88,4),0xffe082);
+    s.position.set(sx,1.69,-.01); s.castShadow=false; g.add(s);
+  }
+  // f-holes (darker slits)
+  [-.14,.14].forEach(dx=>{
+    const fh=M(new THREE.BoxGeometry(.04,.22,.04),0x2a1200);
+    fh.position.set(dx,1.48,.12); g.add(fh);
+  });
+  // Bow resting on stand
+  const bow=M(new THREE.CylinderGeometry(.012,.012,.72,6),0x6d4c41);
+  bow.rotation.z=Math.PI/2.8; bow.position.set(.5,1.55,-.08); g.add(bow);
+  const bowH=M(new THREE.CylinderGeometry(.005,.005,.65,4),0xfff9e1);
+  bowH.rotation.z=Math.PI/2.8; bowH.position.set(.44,1.53,-.08); bowH.castShadow=false; g.add(bowH);
+
+  // Glow ring on floor
+  glowRing=new THREE.Mesh(
+    new THREE.RingGeometry(.55,.7,32),
+    new THREE.MeshLambertMaterial({color:0xce93d8,side:THREE.DoubleSide,transparent:true,opacity:.55})
+  );
+  glowRing.rotation.x=-Math.PI/2; glowRing.position.y=.02;
+  g.add(glowRing);
+
+  g.position.copy(VIOLIN_POS);
+  scene.add(g);
+})();
+
+// ─── MARSHALL CHARACTER ───────────────────────────────────────────────────────
+class MarshallPlayer {
+  constructor(){
+    this.pos    = new THREE.Vector3(0,0,5);
+    this.vel    = new THREE.Vector3();
+    this.facing = Math.PI;
+    this.onGround=true; this.yVel=0;
+    this.walkPhase=0; this.bowPhase=0;
+    this.isPlaying=false;
+    this.parts={}; this.group=new THREE.Group();
+    scene.add(this.group);
+    this._build();
+  }
+
+  _m(geo,col,x=0,y=0,z=0){
+    const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+    m.castShadow=true; m.receiveShadow=true; m.position.set(x,y,z); return m;
+  }
+
+  _build(){
+    const BG=THREE.BoxGeometry, CG=THREE.CylinderGeometry, SG=THREE.SphereGeometry;
+
+    // Torso – dark maroon
+    this.parts.torso=this._m(new BG(.56,1.05,.4),0x6a1b9a,0,1.0,0);
+    this.group.add(this.parts.torso);
+
+    // Head – skin tone
+    this.parts.head=this._m(new BG(.48,.5,.44),0xffcc80,0,1.72,0);
+    this.group.add(this.parts.head);
+
+    // Hair – plain, medium brown
+    const hair=this._m(new BG(.52,.2,.5),0x6d4c41,0,1.98,0);
+    this.group.add(hair);
+    // Slight front fringe for a neat cut
+    this.group.add(this._m(new BG(.5,.08,.06),0x6d4c41,0,1.9,.2));
+
+    // Eyes
+    const el=this._m(new BG(.1,.09,.04),0x1e88e5,-.13,1.76,.23);
+    const er=el.clone(); er.position.x=.13;
+    this.group.add(el,er);
+
+    // Legs
+    this.parts.lLP=new THREE.Group(); this.parts.lLP.position.set(.14,.5,0);
+    this.parts.lLP.add(this._m(new BG(.25,.92,.3),0x4a148c,0,-.46,0)); // pants
+    this.parts.lLP.add(this._m(new BG(.24,.24,.34),0x263238,0,-.96,0)); // shoes
+    this.group.add(this.parts.lLP);
+
+    this.parts.rLP=new THREE.Group(); this.parts.rLP.position.set(-.14,.5,0);
+    this.parts.rLP.add(this._m(new BG(.25,.92,.3),0x4a148c,0,-.46,0));
+    this.parts.rLP.add(this._m(new BG(.24,.24,.34),0x263238,0,-.96,0));
+    this.group.add(this.parts.rLP);
+
+    // Left arm (holds violin)
+    this.parts.lAP=new THREE.Group(); this.parts.lAP.position.set(.38,1.42,0);
+    this.parts.lAP.add(this._m(new BG(.21,.82,.25),0x6a1b9a,0,-.41,0));
+    this.parts.lAP.add(this._m(new BG(.19,.24,.23),0xffcc80,0,-.86,0));
+    this.group.add(this.parts.lAP);
+
+    // Right arm (holds bow)
+    this.parts.rAP=new THREE.Group(); this.parts.rAP.position.set(-.38,1.42,0);
+    this.parts.rAP.add(this._m(new BG(.21,.82,.25),0x6a1b9a,0,-.41,0));
+    this.parts.rAP.add(this._m(new BG(.19,.24,.23),0xffcc80,0,-.86,0));
+    this.group.add(this.parts.rAP);
+
+    // Violin mesh (attached to left arm, hidden until playing)
+    const vg=new THREE.Group();
+    vg.add(this._m(new BG(.14,.36,.06),0x5d2900,0,0,0));
+    vg.add(this._m(new BG(.07,.28,.04),0x3e1a00,0,.3,0));
+    vg.position.set(-.28,-.22,.12); vg.rotation.z=.45;
+    this.parts.violin=vg; this.parts.lAP.add(vg); vg.visible=false;
+
+    // Bow mesh (attached to right arm)
+    const bm=this._m(new THREE.CylinderGeometry(.012,.012,.58,6),0x6d4c41,0,-.32,0);
+    this.parts.bowMesh=bm; this.parts.rAP.add(bm); bm.visible=false;
+  }
+
+  startPlaying(){
+    this.isPlaying=true;
+    this.parts.violin.visible=true;
+    this.parts.bowMesh.visible=true;
+  }
+
+  stopPlaying(){
+    this.isPlaying=false;
+    this.parts.violin.visible=false;
+    this.parts.bowMesh.visible=false;
+  }
+
+  update(dt,input,camTh){
+    if(this.isPlaying){
+      // Bow animation
+      this.bowPhase+=dt*7;
+      this.parts.rAP.rotation.x = -.75+Math.sin(this.bowPhase)*.28;
+      this.parts.rAP.rotation.z = -.18;
+      this.parts.lAP.rotation.x = -.85;
+      this.parts.lAP.rotation.z = .38;
+      this.parts.lLP.rotation.x *= .85;
+      this.parts.rLP.rotation.x *= .85;
+      this.group.position.copy(this.pos);
+      this.group.rotation.y=this.facing;
+      return;
+    }
+    let mx=0,mz=0;
+    if(input.forward ){ mx-=Math.sin(camTh); mz-=Math.cos(camTh); }
+    if(input.backward){ mx+=Math.sin(camTh); mz+=Math.cos(camTh); }
+    if(input.left    ){ mx-=Math.cos(camTh); mz+=Math.sin(camTh); }
+    if(input.right   ){ mx+=Math.cos(camTh); mz-=Math.sin(camTh); }
+    const len=Math.sqrt(mx*mx+mz*mz);
+    if(len>.01){ mx/=len; mz/=len; this.facing=Math.atan2(mx,mz); }
+    const spd=input.sprint?6.5:3.8;
+    this.pos.x+=mx*spd*dt; this.pos.z+=mz*spd*dt;
+    if(input.jump&&this.onGround){ this.yVel=6; this.onGround=false; }
+    if(!this.onGround) this.yVel-=18*dt;
+    this.pos.y+=this.yVel*dt;
+    if(this.pos.y<=0){ this.pos.y=0; this.yVel=0; this.onGround=true; }
+    this.pos.x=Math.max(-10.5,Math.min(10.5,this.pos.x));
+    this.pos.z=Math.max(-8.5,Math.min(8.5,this.pos.z));
+    this.group.position.copy(this.pos);
+    this.group.rotation.y=this.facing;
+    this._anim(dt,len>.01,input.sprint);
+  }
+
+  _anim(dt,moving,sprint){
+    if(moving){
+      this.walkPhase+=dt*(sprint?9:6);
+      const s=Math.sin(this.walkPhase)*.72;
+      this.parts.lLP.rotation.x= s;
+      this.parts.rLP.rotation.x=-s;
+      this.parts.lAP.rotation.x=-s*.55;
+      this.parts.rAP.rotation.x= s*.55;
+      this.parts.lAP.rotation.z=0; this.parts.rAP.rotation.z=0;
+    } else {
+      ['lLP','rLP','lAP','rAP'].forEach(k=>this.parts[k].rotation.x*=.8);
+      this.parts.lAP.rotation.z=0; this.parts.rAP.rotation.z=0;
+      this.parts.head.position.y=1.72+Math.sin(Date.now()*.0018)*.025;
+    }
+  }
+}
+
+const player = new MarshallPlayer();
+
+// ─── NOTE HIGHWAY ─────────────────────────────────────────────────────────────
+const HW_H     = 520;
+const HIT_Y    = HW_H - 72;  // y-coordinate of hit zone centre
+const TRAVEL   = 1.9;         // seconds for note to travel top → hit zone
+const PERF_MS  = 95;
+const GOOD_MS  = 190;
+const LANE_W   = 72;
+const LANE_GAP = 12;
+const L_MARGIN = 18;          // (360 - 4*72 - 3*12) / 2 = 18
+
+function laneX(l)  { return L_MARGIN + l*(LANE_W+LANE_GAP); }
+function laneCX(l) { return laneX(l)+LANE_W/2; }
+
+const hwCv  = document.getElementById('highway-canvas');
+const hwCtx = hwCv.getContext('2d');
+
+let gameActive=false, songTime=0;
+let noteState=[]; // copies of SONG with hit/missed flags
+let score=0, combo=0, hitNotes=0;
+let feedTimer=0;
+const laneHeld=[false,false,false,false];
+
+function initMinigame(){
+  songTime=0; score=0; combo=0; hitNotes=0;
+  noteState=SONG.map(n=>({l:n.l,t:n.t,hit:false,missed:false}));
+  gameActive=true;
+}
+
+function drawHighway(){
+  hwCtx.clearRect(0,0,360,HW_H);
+
+  // Background
+  hwCtx.fillStyle='rgba(8,4,22,.96)';
+  hwCtx.fillRect(0,0,360,HW_H);
+
+  // Lane tracks
+  for(let l=0;l<4;l++){
+    const x=laneX(l);
+    hwCtx.fillStyle='rgba(255,255,255,.035)';
+    hwCtx.fillRect(x,0,LANE_W,HW_H);
+    hwCtx.strokeStyle='rgba(255,255,255,.09)';
+    hwCtx.lineWidth=1;
+    hwCtx.strokeRect(x,0,LANE_W,HW_H);
+  }
+
+  // Beat grid lines
+  const bSpc=0.5;
+  for(let b=0;b<20;b++){
+    const bT=Math.floor(songTime/bSpc)*bSpc - b*bSpc;
+    const e=songTime-bT;
+    if(e<0||e>TRAVEL) continue;
+    const y=(e/TRAVEL)*HIT_Y;
+    hwCtx.strokeStyle='rgba(255,255,255,.05)';
+    hwCtx.lineWidth=1;
+    hwCtx.beginPath(); hwCtx.moveTo(0,y); hwCtx.lineTo(360,y); hwCtx.stroke();
+  }
+
+  // Hit zone line
+  hwCtx.strokeStyle='rgba(255,255,255,.45)';
+  hwCtx.lineWidth=2;
+  hwCtx.beginPath(); hwCtx.moveTo(0,HIT_Y); hwCtx.lineTo(360,HIT_Y); hwCtx.stroke();
+
+  // Lane hit targets
+  for(let l=0;l<4;l++){
+    const x=laneX(l), pressed=laneHeld[l];
+    hwCtx.fillStyle=pressed ? LANE_COLS[l]+'bb' : LANE_COLS[l]+'2e';
+    hwCtx.beginPath();
+    hwCtx.roundRect(x+4,HIT_Y+2,LANE_W-8,38,9);
+    hwCtx.fill();
+    if(pressed){
+      hwCtx.shadowColor=LANE_COLS[l]; hwCtx.shadowBlur=18;
+      hwCtx.fill();
+      hwCtx.shadowBlur=0;
+    }
+    hwCtx.fillStyle='rgba(255,255,255,.72)';
+    hwCtx.font='bold 16px Arial'; hwCtx.textAlign='center';
+    hwCtx.fillText(LANE_KEYS[l],laneCX(l),HIT_Y+27);
+  }
+
+  // Notes
+  noteState.forEach(n=>{
+    if(n.hit||n.missed) return;
+    const elapsed=songTime-n.t; // negative = upcoming
+    if(elapsed>GOOD_MS/1000+.05) return; // way past
+    if(elapsed<-TRAVEL) return;           // too far ahead
+    // progress: 0 = top of highway, 1 = hit zone
+    const prog=(songTime-n.t+TRAVEL)/TRAVEL;
+    if(prog<0||prog>1.12) return;
+    const y=prog*HIT_Y - 14;
+    const x=laneX(n.l);
+    hwCtx.fillStyle=LANE_COLS[n.l];
+    hwCtx.shadowColor=LANE_COLS[n.l]; hwCtx.shadowBlur=14;
+    hwCtx.beginPath(); hwCtx.roundRect(x+5,y,LANE_W-10,28,7); hwCtx.fill();
+    hwCtx.shadowBlur=0;
+    // Shine stripe
+    hwCtx.fillStyle='rgba(255,255,255,.25)';
+    hwCtx.beginPath(); hwCtx.roundRect(x+8,y+4,LANE_W-24,9,4); hwCtx.fill();
+  });
+
+  // String labels at top
+  for(let l=0;l<4;l++){
+    hwCtx.fillStyle=LANE_COLS[l]+'cc';
+    hwCtx.font='bold 13px Arial'; hwCtx.textAlign='center';
+    hwCtx.fillText(LANE_NAMES[l],laneCX(l),17);
+  }
+
+  // Score / combo overlay
+  hwCtx.fillStyle='rgba(255,255,255,.78)';
+  hwCtx.textAlign='right'; hwCtx.font='bold 13px Arial';
+  hwCtx.fillText('Score: '+score,354,HW_H-6);
+  hwCtx.textAlign='left';
+  hwCtx.fillText(combo+'x',6,HW_H-6);
+}
+
+function tryHitLane(lane){
+  if(!gameActive) return;
+  let best=null, bestD=Infinity;
+  noteState.forEach(n=>{
+    if(n.l!==lane||n.hit||n.missed) return;
+    const d=Math.abs((songTime-n.t)*1000);
+    if(d<bestD){ bestD=d; best=n; }
+  });
+  if(best && bestD<GOOD_MS){
+    best.hit=true; hitNotes++;
+    combo++;
+    const perf=bestD<PERF_MS;
+    score+=perf?(100*Math.max(1,combo)):(50*Math.max(1,combo));
+    playNote(lane);
+    showFeedback(perf?'PERFECT!':'GOOD!', perf?'#ffe082':'#a5d6a7');
+    player.bowPhase+=1.0;
+  } else {
+    combo=0; playMiss();
+    showFeedback('MISS','#ef9a9a');
+  }
+}
+
+function showFeedback(txt,col){
+  const el=document.getElementById('feedback');
+  el.textContent=txt; el.style.color=col; el.style.opacity='1';
+  feedTimer=0.65;
+}
+
+function updateMinigame(dt){
+  if(!gameActive) return;
+  songTime+=dt;
+  feedTimer-=dt;
+  if(feedTimer<=0) document.getElementById('feedback').style.opacity='0';
+
+  // Mark past notes as missed
+  noteState.forEach(n=>{
+    if(!n.hit&&!n.missed&&(songTime-n.t)*1000>GOOD_MS+50){
+      n.missed=true; combo=0;
+    }
+  });
+
+  const counted=noteState.filter(n=>n.hit||n.missed).length;
+  const acc=counted>0 ? Math.round(hitNotes/counted*100) : 100;
+  document.getElementById('score-badge').textContent='Score: '+score;
+  document.getElementById('combo-badge').textContent='Combo: '+combo+'x';
+  document.getElementById('acc-badge').textContent='Acc: '+acc+'%';
+
+  drawHighway();
+
+  if(songTime>=SONG_END) endMinigame();
+}
+
+function endMinigame(){
+  gameActive=false;
+  document.getElementById('highway-overlay').style.display='none';
+  document.getElementById('key-flash').style.display='none';
+  document.getElementById('hud').style.display='none';
+  player.stopPlaying();
+  playingViolin=false;
+  levelActive=true;
+
+  const acc=Math.round(hitNotes/SONG.length*100);
+  if(acc>=WIN_THRESHOLD*100) winLevel(acc);
+  else failLevel(acc);
+}
+
+// ─── GAME STATE ────────────────────────────────────────────────────────────────
+let levelActive=false, playingViolin=false;
+
+function distToViolin(){ return player.pos.distanceTo(VIOLIN_POS); }
+
+function startMinigame(){
+  if(playingViolin) return;
+  playingViolin=true;
+  player.startPlaying();
+  player.facing=Math.atan2(VIOLIN_POS.x-player.pos.x, VIOLIN_POS.z-player.pos.z);
+  document.getElementById('approach-hint').style.display='none';
+  document.getElementById('highway-overlay').style.display='flex';
+  document.getElementById('key-flash').style.display='flex';
+  document.getElementById('hud').style.display='flex';
+  audioCtx.resume();
+  initMinigame();
+}
+
+// ─── CAMERA ───────────────────────────────────────────────────────────────────
+let camTheta=0, camPhi=0.36;
+let rmbDown=false, lastMX=0, lastMY=0;
+const CAM_DIST=7.5;
+const camTarget=new THREE.Vector3(), camWant=new THREE.Vector3();
+
+canvas3d.addEventListener('contextmenu',e=>e.preventDefault());
+canvas3d.addEventListener('mousedown',e=>{ if(e.button===2){rmbDown=true;lastMX=e.clientX;lastMY=e.clientY;} });
+window.addEventListener('mouseup',e=>{ if(e.button===2) rmbDown=false; });
+window.addEventListener('mousemove',e=>{
+  if(!rmbDown) return;
+  camTheta-=(e.clientX-lastMX)*.005; camPhi-=(e.clientY-lastMY)*.005;
+  camPhi=Math.max(.05,Math.min(1.25,camPhi)); lastMX=e.clientX; lastMY=e.clientY;
+});
+
+function updateCamera(dt){
+  const px=player.pos.x, py=player.pos.y+1.1, pz=player.pos.z;
+  camWant.set(
+    px+Math.sin(camTheta)*Math.cos(camPhi)*CAM_DIST,
+    py+Math.sin(camPhi)*CAM_DIST,
+    pz+Math.cos(camTheta)*Math.cos(camPhi)*CAM_DIST
+  );
+  const a=1-Math.pow(.01,dt);
+  camera.position.lerp(camWant,a);
+  camTarget.lerp(new THREE.Vector3(px,py,pz),a);
+  camera.lookAt(camTarget);
+}
+
+// ─── INPUT ────────────────────────────────────────────────────────────────────
+const keys={forward:false,backward:false,left:false,right:false,sprint:false};
+let jumpQ=false;
+const keyBtns=document.querySelectorAll('.key-btn');
+
+document.addEventListener('keydown',e=>{
+  if(gameActive){
+    // Lane keys
+    const laneMap={'KeyA':0,'KeyS':1,'KeyD':2,'KeyF':3};
+    const l=laneMap[e.code];
+    if(l!==undefined){ tryHitLane(l); laneHeld[l]=true; keyBtns[l].classList.add('lit'); }
+    return; // block movement during song
+  }
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    keys.forward =true;  break;
+    case'KeyS':case'ArrowDown':  keys.backward=true;  break;
+    case'KeyA':case'ArrowLeft':  keys.left    =true;  break;
+    case'KeyD':case'ArrowRight': keys.right   =true;  break;
+    case'ShiftLeft':case'ShiftRight': keys.sprint=true; break;
+    case'Space': e.preventDefault(); if(player.onGround&&!playingViolin) jumpQ=true; break;
+    case'KeyE':
+      if(levelActive&&!playingViolin&&distToViolin()<2.2) startMinigame();
+      break;
+  }
+});
+
+document.addEventListener('keyup',e=>{
+  if(gameActive){
+    const laneMap={'KeyA':0,'KeyS':1,'KeyD':2,'KeyF':3};
+    const l=laneMap[e.code];
+    if(l!==undefined){ laneHeld[l]=false; keyBtns[l].classList.remove('lit'); }
+    return;
+  }
+  switch(e.code){
+    case'KeyW':case'ArrowUp':    keys.forward =false; break;
+    case'KeyS':case'ArrowDown':  keys.backward=false; break;
+    case'KeyA':case'ArrowLeft':  keys.left    =false; break;
+    case'KeyD':case'ArrowRight': keys.right   =false; break;
+    case'ShiftLeft':case'ShiftRight': keys.sprint=false; break;
+  }
+});
+
+// ─── WIN / FAIL ────────────────────────────────────────────────────────────────
+function saveStars(lvl,s){
+  const k='tuck_stars_'+lvl;
+  if(s>parseInt(localStorage.getItem(k)||'0')) localStorage.setItem(k,String(s));
+  if(window.Ach) Ach.check();
+  const el=document.getElementById('win-stars-earned');
+  if(el) el.textContent='★'.repeat(s)+'☆'.repeat(3-s);
+}
+function winLevel(acc){
+  document.getElementById('win-score').textContent='Score: '+score;
+  document.getElementById('win-acc').textContent='Accuracy: '+acc+'%';
+  const last=currentStage>=SONGS.length-1;
+  const nextBtn=document.getElementById('next-btn');
+  const winTitle=document.querySelector('.win-title');
+  if(last){
+    winTitle.textContent='🎻 BRAVO!';
+    nextBtn.textContent='⌂ Menu';
+    nextBtn.dataset.action='menu';
+    saveStars(3, acc>=90?3:acc>=75?2:1);
+  }else{
+    winTitle.textContent=`🎻 SONG ${currentStage+1} DONE!`;
+    nextBtn.textContent='Next Song →';
+    nextBtn.dataset.action='next';
+    document.getElementById('win-stars-earned').textContent=`Song ${currentStage+1} / ${SONGS.length}`;
+  }
+  document.getElementById('win').style.display='flex';
+  playWin();
+}
+
+function failLevel(acc){
+  document.getElementById('fail-acc').textContent=
+    'Accuracy: '+acc+'% — need '+Math.round(WIN_THRESHOLD*100)+'% to pass';
+  document.getElementById('fail').style.display='flex';
+}
+
+function resetLevel(){
+  document.getElementById('win').style.display='none';
+  document.getElementById('fail').style.display='none';
+  player.pos.set(0,0,5); player.facing=Math.PI;
+  levelActive=true;
+  startMinigame();
+}
+
+// ─── DOM ───────────────────────────────────────────────────────────────────────
+const introEl       = document.getElementById('intro');
+const approachHint  = document.getElementById('approach-hint');
+
+function startLevel(){
+  introEl.style.display='none';
+  levelActive=true;
+  audioCtx.resume();
+}
+
+document.getElementById('intro-btn').addEventListener('click',startLevel);
+document.getElementById('replay-btn').addEventListener('click',resetLevel);
+document.getElementById('retry-btn').addEventListener('click',resetLevel);
+document.getElementById('next-btn').addEventListener('click',()=>{
+  if(document.getElementById('next-btn').dataset.action==='next'){
+    setStage(currentStage+1);
+    resetLevel();
+  }else{
+    window.location.href='index.html';
+  }
+});
+document.getElementById('fail-menu-btn').addEventListener('click',()=>window.location.href='index.html');
+
+// ─── GAME LOOP ─────────────────────────────────────────────────────────────────
+let prev=performance.now();
+
+function tick(){
+  requestAnimationFrame(tick);
+  const now=performance.now();
+  const dt=Math.min((now-prev)/1000,.05);
+  prev=now;
+
+  if(levelActive){
+    const jmp=jumpQ; jumpQ=false;
+    player.update(dt,{...keys,jump:jmp},camTheta);
+
+    if(!playingViolin){
+      const near=distToViolin()<2.2;
+      approachHint.style.display=near?'block':'none';
+    }
+
+    // Glow ring pulse
+    glowRing.material.opacity=.35+.3*Math.sin(Date.now()*.0028);
+  }
+
+  if(gameActive) updateMinigame(dt);
+
+  updateCamera(dt);
+  renderer.render(scene,camera);
+}
+
+tick();
+
+// ── Mobile touch controls ──
+if(Mobile.ready){
+  Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.button({label:'PLAY',code:'KeyE'});
+  // During the song, tap these lanes (A S D F)
+  Mobile.lanes(['KeyA','KeyS','KeyD','KeyF']);
+}
+</script>
+</body>
+</html>
