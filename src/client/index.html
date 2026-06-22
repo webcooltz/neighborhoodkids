@@ -428,7 +428,7 @@ header {
 
   // Live "players online" badge on the LOBBY card.
   // Keep this in sync with SERVER_URL in lobby.html ('' = local dev ws://localhost:8787).
-  var SERVER_URL='';
+  var SERVER_URL='wss://neighborhoodkids.onrender.com';
   var url=SERVER_URL||'ws://localhost:8787';
   var badge=document.getElementById('lobby-count');
   if(badge){
