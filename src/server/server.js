@@ -61,6 +61,22 @@ const wss = new WebSocketServer({ server });
 
 let nextId = 1;
 const players = new Map(); // ws -> {id,name,char,x,z,ry,joined}
+const placed = [];         // { owner, entry } for every object placed this session
+const MAX_OBJECTS = 10;    // live objects per player
+const PLACE_COOLDOWN = 1000;     // ms between placements
+const GLOBAL_OBJECT_CAP = 500;   // safety ceiling for the whole world
+
+// Validate/trim an incoming object so a client can't push junk or huge payloads.
+function sanitizeObj(o) {
+  if (!o || typeof o !== 'object') return null;
+  const id = String(o.id || '').slice(0, 40);
+  const type = String(o.type || '').slice(0, 40);
+  if (!id || !type) return null;
+  const num = (v) => { v = +v; return Number.isFinite(v) ? Math.max(-1000, Math.min(1000, v)) : 0; };
+  const e = { id, type, x: num(o.x), y: num(o.y), z: num(o.z), ry: num(o.ry) };
+  if (o.text != null) e.text = String(o.text).slice(0, 200);
+  return e;
+}
 
 function broadcast(obj, exceptWs) {
   const data = JSON.stringify(obj);
@@ -81,7 +97,7 @@ function broadcastCount() {
 
 wss.on('connection', (ws) => {
   const id = nextId++;
-  const self = { id, name: 'Player', char: 'dawson', x: 0, z: 9, ry: Math.PI, ride: 'none', joined: false };
+  const self = { id, name: 'Player', char: 'dawson', x: 0, z: 9, ry: Math.PI, ride: 'none', hold: 'none', joined: false, lastPlace: 0, placeCount: 0 };
   players.set(ws, self);
 
   // Tell the newcomer the current count right away (menu badge / lobby HUD).
@@ -96,11 +112,12 @@ wss.on('connection', (ws) => {
       self.name = String(msg.name || 'Player').slice(0, 16);
       self.char = String(msg.char || 'dawson');
       self.ride = String(msg.ride || 'none');
+      self.hold = String(msg.hold || 'none');
       self.x = +msg.x || 0; self.z = +msg.z || 0; self.ry = +msg.ry || 0;
       // Send current roster (joined players) to the newcomer
       const roster = [];
       for (const p of players.values()) if (p.joined && p !== self) roster.push(p);
-      ws.send(JSON.stringify({ t: 'init', id, players: roster }));
+      ws.send(JSON.stringify({ t: 'init', id, players: roster, objs: placed.map((p) => p.entry) }));
       // Tell everyone else about the newcomer + new count
       broadcast({ t: 'join', player: self }, ws);
       broadcastCount();
@@ -110,6 +127,28 @@ wss.on('connection', (ws) => {
     } else if (msg.t === 'ride' && self.joined) {
       self.ride = String(msg.ride || 'none');
       broadcast({ t: 'ride', id, ride: self.ride }, ws);
+    } else if (msg.t === 'hold' && self.joined) {
+      self.hold = String(msg.hold || 'none');
+      broadcast({ t: 'hold', id, hold: self.hold }, ws);
+    } else if (msg.t === 'use' && self.joined) {
+      // Transient "I used my gadget" event — friends play the matching effect.
+      broadcast({ t: 'use', id, hold: String(msg.hold || 'none').slice(0, 20) }, ws);
+    } else if (msg.t === 'place' && self.joined) {
+      const now = Date.now();
+      if (now - self.lastPlace < PLACE_COOLDOWN) {
+        ws.send(JSON.stringify({ t: 'reject', reason: '1 second between placements.' })); return;
+      }
+      if (self.placeCount >= MAX_OBJECTS) {
+        ws.send(JSON.stringify({ t: 'reject', reason: MAX_OBJECTS + ' object limit reached.' })); return;
+      }
+      if (placed.length >= GLOBAL_OBJECT_CAP) {
+        ws.send(JSON.stringify({ t: 'reject', reason: 'World is full.' })); return;
+      }
+      const entry = sanitizeObj(msg.obj);
+      if (!entry) return;
+      self.lastPlace = now; self.placeCount++;
+      placed.push({ owner: id, entry });
+      broadcast({ t: 'place', obj: entry, owner: id }, ws);
     } else if (msg.t === 'chat' && self.joined) {
       const text = String(msg.text || '').slice(0, 200);
       if (text) broadcast({ t: 'chat', id, name: self.name, text }, ws);

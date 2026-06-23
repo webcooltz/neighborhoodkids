@@ -77,6 +77,15 @@ canvas#c { display:block; width:100vw; height:100vh; }
 .key-btn[data-lane="3"] { background:rgba(50,200,80,.65); }
 .key-btn.lit { filter:brightness(2); transform:scale(1.12); border-color:rgba(255,255,255,.7); }
 
+/* Mobile: keep the joystick/PLAY and the lane buttons from overlapping.
+   Before the song → show joystick + PLAY, hide lanes.
+   During the song (html.rhythm-on) → show only the lane row. */
+html.is-touch #mc-lanes { display:none; bottom:18px; gap:16px; }
+html.is-touch #mc-lanes .mc-btn { width:72px; height:72px; min-width:72px; }
+html.is-touch.rhythm-on #mc-lanes { display:flex; }
+html.is-touch.rhythm-on #mc-joy,
+html.is-touch.rhythm-on #mc-btns { display:none; }
+
 /* ── Hit feedback text ── */
 #feedback {
   position:fixed; top:38%; left:50%; transform:translate(-50%,-50%);
@@ -147,6 +156,7 @@ canvas#c { display:block; width:100vw; height:100vh; }
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script src="../js/mobile.js"></script>
 <script src="../js/achievements.js"></script>
+<script src="../js/hub.js"></script>
 <script>
 'use strict';
 
@@ -305,7 +315,7 @@ function M(geo,col,rx=0,ry=0,rz=0){
   // Bed (right corner)
   const bf=M(new THREE.BoxGeometry(4.2,.52,6.2),0x4e342e);
   bf.position.set(7.5,.26,-6.8); scene.add(bf);
-  const mt=M(new THREE.BoxGeometry(3.9,.42,5.9),0xf48fb1);
+  const mt=M(new THREE.BoxGeometry(3.9,.42,5.9),0x42a5ff);
   mt.position.set(7.5,.68,-6.8); scene.add(mt);
   const pl=M(new THREE.BoxGeometry(1.7,.28,1.3),0xfff9c4);
   pl.position.set(7.5,.9,-9.0); scene.add(pl);
@@ -723,6 +733,7 @@ function updateMinigame(dt){
 
 function endMinigame(){
   gameActive=false;
+  document.documentElement.classList.remove('rhythm-on');   // mobile: restore joystick/PLAY
   document.getElementById('highway-overlay').style.display='none';
   document.getElementById('key-flash').style.display='none';
   document.getElementById('hud').style.display='none';
@@ -750,6 +761,7 @@ function startMinigame(){
   document.getElementById('key-flash').style.display='flex';
   document.getElementById('hud').style.display='flex';
   audioCtx.resume();
+  document.documentElement.classList.add('rhythm-on');   // mobile: swap joystick/PLAY → lane buttons
   initMinigame();
 }
 
@@ -884,10 +896,10 @@ document.getElementById('next-btn').addEventListener('click',()=>{
     setStage(currentStage+1);
     resetLevel();
   }else{
-    window.location.href='../index.html';
+    window.Hub.home('../');
   }
 });
-document.getElementById('fail-menu-btn').addEventListener('click',()=>window.location.href='../index.html');
+document.getElementById('fail-menu-btn').addEventListener('click',()=>window.Hub.home('../'));
 
 // ─── GAME LOOP ─────────────────────────────────────────────────────────────────
 let prev=performance.now();

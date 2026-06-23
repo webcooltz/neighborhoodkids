@@ -177,6 +177,12 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
     <div class="lab">Tool</div>
     <button id="tool-move" class="active">Move</button>
     <button id="tool-rotate">Rotate</button>
+    <button id="tool-paint">🎨 Paint</button>
+    <button id="ed-grid" class="active" title="Snap to grid">▦ Grid</button>
+  </div>
+  <div class="grp" id="ed-paintgrp" style="display:none">
+    <div class="lab">Paint ground (click/drag)</div>
+    <div id="ed-palette" style="display:flex;flex-wrap:wrap;gap:4px"></div>
   </div>
   <div class="grp">
     <div class="lab">Selected</div>
@@ -197,9 +203,8 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
     <button id="ed-ungroup">⊟ Ungroup</button>
   </div>
   <div class="grp">
-    <div class="lab">Add object</div>
+    <div class="lab">Add object — pick one, then click to place (scroll = rotate)</div>
     <select id="ed-cat"></select>
-    <button id="ed-add" style="width:100%;margin-top:5px">+ Add to scene</button>
   </div>
   <button class="exp" id="ed-save">💾 Save level</button>
   <button id="ed-export" style="width:100%;margin-top:5px;font-size:11px">⬇ Download backup</button>
@@ -221,6 +226,14 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
       <button data-ride="bike"><span class="ic">🚲</span>Bike</button>
       <button data-ride="unicorn"><span class="ic">🦄</span>Unicorn</button>
     </div>
+    <div class="hint">Gadgets to hold</div>
+    <div class="rides" id="gadgets">
+      <button data-hold="none"><span class="ic">✋</span>None</button>
+      <button data-hold="watergun"><span class="ic">💦</span>Water Gun</button>
+      <button data-hold="webshooter"><span class="ic">🕸️</span>Web Shooters</button>
+      <button data-hold="violin"><span class="ic">🎻</span>Violin</button>
+    </div>
+    <div class="hint">Press <b>F</b> (or the USE button) to use what you're holding</div>
     <button id="catalog-close" class="ovbtn ghost">Close</button>
   </div>
 </div>
@@ -246,9 +259,18 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
   </div>
 </div>
 
+<div id="portal-debug" style="position:fixed;right:12px;bottom:52px;z-index:200;font:11px monospace;
+  color:#0f0;background:rgba(0,0,0,.6);padding:4px 7px;white-space:pre;border-radius:6px">F3: toggle debug</div>
+<div id="portal-prompt" style="position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:60;
+  display:none;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.35);border-radius:20px;
+  padding:8px 18px;color:#fff;font-weight:bold;font-size:15px;text-shadow:0 1px 2px #000;pointer-events:none">
+  Press <b>E</b> to play
+</div>
+
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script src="js/mobile.js"></script>
 <script src="js/achievements.js"></script>
+<script src="js/hub.js"></script>
 <script>
 'use strict';
 
@@ -261,6 +283,15 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
 const SERVER_URL = 'wss://neighborhoodkids.onrender.com';
 const WS_URL = SERVER_URL || 'ws://localhost:8787';
 
+// Editor saves are HOST-authoritative: they only write to your LOCAL node server
+// (localhost:8787), so running the project locally lets you build a permanent
+// world. On the deployed site there's no local server → editing is a temporary
+// sandbox (multiplayer placements still show live; use Download backup to keep them).
+const IS_LOCAL = (location.hostname==='localhost' || location.hostname==='127.0.0.1' || location.hostname==='' || location.protocol==='file:');
+const SAVE_URL = IS_LOCAL ? 'http://localhost:8787' : '';
+// Debug box: on by default when running locally, hidden on the deployed site (F3 toggles).
+(function(){ const d=document.getElementById('portal-debug'); if(d) d.style.display=IS_LOCAL?'block':'none'; })();
+
 // ─── CHARACTERS ───────────────────────────────────────────────────────────────
 const CHARS = [
   {id:'dawson',   name:'Dawson',   emoji:'⚽', accent:'#4caf50', skin:0xffccaa, hair:0xc8961c, shirt:0x1565c0, pants:0x283593, shoe:0x1a1a1a},
@@ -271,6 +302,7 @@ const CHARS = [
   {id:'mackayla', name:'Mackayla', emoji:'🥋', accent:'#ab47bc', skin:0xffe0bd, hair:0x1a1a1a, shirt:0xf5f5f5, pants:0xf5f5f5, shoe:0x212121},
   {id:'wyatt',    name:'Wyatt',    emoji:'🎣', accent:'#1565c0', skin:0xffcc80, hair:0xe6c66b, shirt:0x1565c0, pants:0x26a69a, shoe:0x6d4c41},
   {id:'sawyer',   name:'Sawyer',   emoji:'🦄', accent:'#9c27b0', skin:0xffe0b2, hair:0xffd54f, shirt:0x9c27b0, pants:0x9c27b0, shoe:0xfff9c4},
+  {id:'tyler',    name:'Tyler',    emoji:'💦', accent:'#546e7a', skin:0xe8b48c, hair:0x3a2a1a, shirt:0x37474f, pants:0x263238, shoe:0x1a1a1a},
 ];
 const CHAR_BY_ID = Object.fromEntries(CHARS.map(c=>[c.id,c]));
 
@@ -308,11 +340,200 @@ function MM(geo,col,shadow){
 
 const clouds=[];
 const colliders=[]; // {x,z,r}
-const BOUND=38;
+const BOUND=70;
 
 // position/rotation helpers (Object3D.position is read-only — can't Object.assign it)
 function at(m,x,y,z){ m.position.set(x||0,y||0,z||0); return m; }
 function rot(m,x,y,z){ m.rotation.set(x||0,y||0,z||0); return m; }
+
+// Portal houses → each launches a minigame. Filled in by buildTown.
+const portals=[];   // {x,z,file,name,sub,pad,halo}
+let nearPortal=null;
+const _portalWP=new THREE.Vector3();   // scratch for portal world-position lookups
+
+// A standing sign board with the game name (readable from both sides).
+function makeSignBoard(title,sub,accent){
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=128;
+  const cx=cv.getContext('2d');
+  cx.fillStyle='#fff8e1'; cx.fillRect(0,0,256,128);
+  cx.fillStyle=accent||'#444'; cx.fillRect(0,0,256,12); cx.fillRect(0,116,256,12);
+  cx.fillStyle='#222'; cx.textAlign='center';
+  cx.font='bold 30px Arial'; cx.fillText(title,128,56);
+  cx.font='20px Arial'; cx.fillStyle='#555'; cx.fillText(sub,128,92);
+  const tex=new THREE.CanvasTexture(cv);
+  const g=new THREE.Group();
+  g.add(at(MM(new THREE.CylinderGeometry(.09,.09,2.2,6),0x6d4c41),0,1.1,0));
+  const board=new THREE.Mesh(new THREE.PlaneGeometry(3,1.5),new THREE.MeshBasicMaterial({map:tex}));
+  board.position.y=2.5; g.add(board);
+  const back=board.clone(); back.rotation.y=Math.PI; g.add(back);
+  g.userData.noEdit=true;
+  return g;
+}
+
+// Glowing portal marker (pad + halo + tall beam) used by non-house portals.
+function makePortalFx(accentHex){
+  const accent=new THREE.Color(accentHex); const g=new THREE.Group();
+  const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.9,1.9,.14,24),
+    new THREE.MeshBasicMaterial({color:accent,transparent:true,opacity:.5})); pad.position.y=.1; pad.userData.noEdit=true; g.add(pad);
+  const halo=new THREE.Mesh(new THREE.TorusGeometry(1.9,.13,8,24),new THREE.MeshBasicMaterial({color:accent}));
+  halo.rotation.x=Math.PI/2; halo.position.y=.35; halo.userData.noEdit=true; g.add(halo);
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,16,12),
+    new THREE.MeshBasicMaterial({color:accent,transparent:true,opacity:.16})); beam.position.y=8; beam.userData.noEdit=true; g.add(beam);
+  return {group:g,pad,halo};
+}
+// Sawyer's portal: a unicorn statue in the park.
+function buildUnicornStatue(x,z,d){
+  const g=new THREE.Group(); g.position.set(x,0,z); scene.add(g);
+  g.add(at(MM(new THREE.CylinderGeometry(1.5,1.7,1,16),0xbcaaa4),0,.5,0));   // pedestal
+  const u=new THREE.Group(); u.position.y=1.0; g.add(u);
+  u.add(at(MM(new THREE.BoxGeometry(.7,.7,1.7),0xffffff),0,1.0,0));          // body
+  u.add(at(MM(new THREE.BoxGeometry(.5,.85,.5),0xffffff),0,1.35,.95));       // neck/head
+  const horn=MM(new THREE.CylinderGeometry(0,.08,.5,8),0xffd54f); horn.position.set(0,1.95,1.05); u.add(horn);
+  [[-.25,.7],[.25,.7],[-.25,-.7],[.25,-.7]].forEach(([lx,lz])=> u.add(at(MM(new THREE.CylinderGeometry(.11,.11,1,6),0xffffff),lx,.0,lz)));
+  u.add(at(MM(new THREE.BoxGeometry(.14,.55,.5),0xf8bbd0),0,.9,-.9));        // pink tail
+  u.add(at(MM(new THREE.BoxGeometry(.2,.5,.14),0xf8bbd0),0,1.55,.7));        // pink mane
+  const fx=makePortalFx(d.accent); fx.group.position.set(0,0,3.0); g.add(fx.group);
+  g.add(at(makeSignBoard(d.name,d.sub,d.accent),0,0,4.6));
+  colliders.push({x,z,r:1.9});
+  portals.push({x, z, file:d.file, name:d.name, sub:d.sub, pad:fx.pad, halo:fx.halo});
+}
+// Wyatt's portal: a fishing pond by the park.
+function buildPond(x,z,d){
+  const g=new THREE.Group(); g.position.set(x,0,z); scene.add(g);
+  g.add(at(MM(new THREE.CylinderGeometry(4.2,4.2,.2,30),0x4fc3f7,false),0,.06,0));   // water
+  const rim=MM(new THREE.TorusGeometry(4.2,.32,8,30),0x9e9e9e); rim.rotation.x=Math.PI/2; rim.position.y=.16; g.add(rim);
+  g.add(at(MM(new THREE.SphereGeometry(.55,6,5),0x757575),3.6,.3,1.4));               // rock
+  g.add(at(MM(new THREE.SphereGeometry(.4,6,5),0x616161),-3.2,.25,-2));               // rock
+  g.add(at(MM(new THREE.BoxGeometry(1,.16,3.2),0x8d6e63),0,.26,5.0));                 // dock
+  g.add(at(MM(new THREE.BoxGeometry(.3,.55,.12),0xff8a65),0,.7,0));                   // jumping fish
+  const fx=makePortalFx(d.accent); fx.group.position.set(0,0,6.4); g.add(fx.group);   // pad on the bank past the dock
+  g.add(at(makeSignBoard(d.name,d.sub,d.accent),0,0,7.8));
+  colliders.push({x,z,r:4.2});                                                        // can't walk on water
+  portals.push({x:x, z:z+6.4, file:d.file, name:d.name, sub:d.sub, pad:fx.pad, halo:fx.halo});
+}
+
+// A spooky graveyard (east of the park) — holds Tyler's portal.
+function buildGraveyard(cx,cz,d){
+  const H=10; const g=new THREE.Group(); g.position.set(cx,0,cz); scene.add(g);
+  const ground=MM(new THREE.PlaneGeometry(H*2,H*2),0x3a3f33,false);
+  ground.rotation.x=-Math.PI/2; ground.position.y=.03; ground.userData.noEdit=true; g.add(ground);
+  // low iron fence (skip a gate gap on the park-facing west side)
+  for(let t=-H;t<=H;t+=1.6){
+    [[t,-H],[t,H],[H,t]].forEach(([x,z])=> g.add(at(MM(new THREE.BoxGeometry(.1,1.2,.1),0x2f3a40),x,.6,z)));
+    if(Math.abs(t)>2.5) g.add(at(MM(new THREE.BoxGeometry(.1,1.2,.1),0x2f3a40),-H,.6,t));   // west wall w/ gateway
+  }
+  // gravestones
+  const stoneCols=[0x9e9e9e,0xbdbdbd,0x90a4ae]; let si=0;
+  for(let gx=-H+2.5; gx<=H-2.5; gx+=3.2){
+    for(let gz=-H+2.5; gz<=H-2.5; gz+=3.6){
+      if(Math.hypot(gx,gz)<3.2) continue;   // keep the centre clear for the portal
+      const st=new THREE.Group(); st.position.set(gx+(Math.random()-.5),0,gz+(Math.random()-.5));
+      st.rotation.y=(Math.random()-.5)*.5; g.add(st);
+      const col=stoneCols[si%3], r=Math.random();
+      if(r<.5){ st.add(at(MM(new THREE.BoxGeometry(.8,1.0,.18),col),0,.5,0));
+        const cap=MM(new THREE.CylinderGeometry(.4,.4,.18,12),col); cap.rotation.x=Math.PI/2; cap.position.y=1.0; st.add(cap); }
+      else if(r<.8){ st.add(at(MM(new THREE.BoxGeometry(.16,1.3,.16),col),0,.65,0));
+        st.add(at(MM(new THREE.BoxGeometry(.7,.16,.16),col),0,1.0,0)); }
+      else st.add(at(MM(new THREE.BoxGeometry(1.2,.4,.7),0x808076),0,.2,0));
+      si++;
+    }
+  }
+  // dead tree
+  const dt=new THREE.Group(); dt.position.set(H-3,0,-H+3); g.add(dt);
+  dt.add(at(MM(new THREE.CylinderGeometry(.25,.42,3,6),0x3e2f23),0,1.5,0));
+  [[.6,2.4,.3],[-.5,2.6,-.2],[.2,2.8,-.5]].forEach(([x,y,z])=>{ const b=MM(new THREE.CylinderGeometry(.07,.13,1.3,5),0x3e2f23);
+    b.position.set(x,y,z); b.rotation.set(z*.9,0,-x*.9); dt.add(b); });
+  // crypt / mausoleum
+  const crypt=new THREE.Group(); crypt.position.set(-H+3.5,0,H-3.5); g.add(crypt);
+  crypt.add(at(MM(new THREE.BoxGeometry(3.2,2.6,3.2),0x6d6f73),0,1.3,0));
+  const roof=MM(new THREE.ConeGeometry(2.7,1.3,4),0x55585c); roof.position.y=3.2; roof.rotation.y=Math.PI/4; crypt.add(roof);
+  crypt.add(at(MM(new THREE.BoxGeometry(1,1.8,.2),0x222),0,.9,1.61));   // door
+  colliders.push({x:cx-H+3.5,z:cz+H-3.5,r:2.2});   // crypt
+  colliders.push({x:cx+H-3,z:cz-H+3,r:.6});         // dead tree
+  // Tyler's portal at the centre of the graveyard (grouped with it — a custom area)
+  if(d){
+    const fx=makePortalFx(d.accent); fx.group.position.set(0,0,0); g.add(fx.group);
+    g.add(at(makeSignBoard(d.name,d.sub,d.accent),0,0,-2.4));
+    portals.push({x:cx, z:cz, file:d.file, name:d.name, sub:d.sub, pad:fx.pad, halo:fx.halo});
+  }
+  return g;
+}
+
+// A school complex. Each major piece is its own scene object so it can be
+// moved/ungrouped in the editor; flat ground (lot/court/sand) stays fixed.
+function buildSchool(cx,cz){
+  const CONCRETE=0x9e9e9e, ASPHALT=0x3a3d42;
+  const groundPad=(w,d,col,x,z)=>{ const m=MM(new THREE.PlaneGeometry(w,d),col,false);
+    m.rotation.x=-Math.PI/2; m.position.set(cx+x,.03,cz+z); m.userData.noEdit=true; scene.add(m); };
+
+  // ── school building (each part is its own object so it can be edited/deleted) ──
+  const bz=cz-11;
+  scene.add(at(MM(new THREE.BoxGeometry(22,7,9),0xe0c9a6),cx,3.5,bz));         // main block
+  scene.add(at(MM(new THREE.BoxGeometry(8,9,9),0xd2b48c),cx-9,4.5,bz));        // wing
+  scene.add(at(MM(new THREE.BoxGeometry(22.6,.6,9.4),0x8d6e63),cx,7.3,bz));    // roof trim
+  const win=new THREE.Group(); scene.add(win);                                 // all windows (one object)
+  for(let wx=-7; wx<=9; wx+=3){ for(let wy=2.2; wy<=5.4; wy+=2.4){
+    win.add(at(MM(new THREE.BoxGeometry(1.5,1.3,.1),0x90caf9),cx+wx,wy,bz+4.55)); } }
+  scene.add(at(MM(new THREE.BoxGeometry(2.6,3,.2),0x5d4037),cx+2,1.5,bz+4.6)); // door
+  scene.add(at(MM(new THREE.CylinderGeometry(.1,.1,9,8),0xcfd8dc),cx+11,4.5,bz+4));  // flag pole
+  scene.add(at(MM(new THREE.BoxGeometry(1.8,1.1,.05),0x1565c0),cx+11.95,8.2,bz+4));  // flag (blue)
+  const sgn=makeSignBoard('SCHOOL','Learn & Play','#1565c0'); sgn.position.set(cx,0,bz+5.4); scene.add(sgn);
+  colliders.push({x:cx-9,z:bz,r:5.5},{x:cx+5,z:bz,r:5.5});
+
+  // ── parking lot + cars (each car is its own object) ──
+  groundPad(14,12,ASPHALT,-15,4);
+  for(let sx=-5;sx<=5;sx+=2.5){ const s=MM(new THREE.BoxGeometry(.12,.02,3.6),0xffffff,false);
+    s.position.set(cx-15+sx,.05,cz+4); s.userData.noEdit=true; scene.add(s); }
+  [[-19,2,0xe53935],[-16,2,0x1565c0],[-13,2,0xfdd835]].forEach(([x,z,col])=>{
+    const c=new THREE.Group(); c.position.set(cx+x,0,cz+z); scene.add(c);
+    c.add(at(MM(new THREE.BoxGeometry(1.8,.7,3.4),col),0,.6,0));
+    c.add(at(MM(new THREE.BoxGeometry(1.6,.7,1.8),col),0,1.15,-.2));
+    c.add(at(MM(new THREE.BoxGeometry(1.5,.5,1.6),0x263238),0,1.16,-.2));
+    [[-.9,1.1],[.9,1.1],[-.9,-1.1],[.9,-1.1]].forEach(([wx,wz])=>{ const w=MM(new THREE.CylinderGeometry(.35,.35,.3,10),0x111);
+      w.rotation.z=Math.PI/2; w.position.set(wx,.35,wz); c.add(w); });
+    colliders.push({x:cx+x,z:cz+z,r:1.6});
+  });
+
+  // ── concrete court + hoops (each hoop is its own object) ──
+  groundPad(18,13,CONCRETE,1,15);
+  const ml=MM(new THREE.BoxGeometry(18,.02,.14),0xffeb3b,false); ml.position.set(cx+1,.05,cz+15); ml.userData.noEdit=true; scene.add(ml);
+  [[-7.5,0],[9.5,Math.PI]].forEach(([hx,ry])=>{
+    const h=new THREE.Group(); h.position.set(cx+hx,0,cz+15); h.rotation.y=ry; scene.add(h);
+    h.add(at(MM(new THREE.CylinderGeometry(.12,.12,4,8),0xb0bec5),0,2,0));
+    h.add(at(MM(new THREE.BoxGeometry(1.8,1.2,.12),0xffffff),0,3.4,.6));
+    const rim=MM(new THREE.TorusGeometry(.35,.05,8,16),0xff6f00); rim.rotation.x=Math.PI/2; rim.position.set(0,3.0,.95); h.add(rim);
+    colliders.push({x:cx+hx,z:cz+15,r:.5});
+  });
+
+  // ── playground: swings + slide (sand removed — paint it back if you want) ──
+  const sw=new THREE.Group(); sw.position.set(cx+14,0,cz+9); scene.add(sw);
+  sw.add(rot(at(MM(new THREE.CylinderGeometry(.08,.08,4,6),0x9e9e9e),0,2.6,0),0,0,Math.PI/2));
+  [-1.8,1.8].forEach(sx=>[-.7,.7].forEach(zo=>{ sw.add(rot(at(MM(new THREE.CylinderGeometry(.07,.07,3,6),0x9e9e9e),sx,1.3,zo),0,0,sx>0?.3:-.3)); }));
+  [-.7,.7].forEach(sx=>{ sw.add(at(MM(new THREE.BoxGeometry(.04,1.4,.04),0x607d8b),sx,1.6,0)); sw.add(at(MM(new THREE.BoxGeometry(.5,.08,.28),0x1a237e),sx,.9,0)); });
+  const sl=new THREE.Group(); sl.position.set(cx+17,0,cz+5); scene.add(sl);
+  sl.add(rot(at(MM(new THREE.BoxGeometry(1,.1,3),0xff7043),0,1.4,0),.5,0,0));
+  sl.add(at(MM(new THREE.BoxGeometry(1,2.4,1),0xffca28),0,1.2,-1.6));
+  colliders.push({x:cx+17,z:cz+3.4,r:.8});
+}
+
+// A karate dojo (one group so it's easy to move as a unit).
+function buildDojo(cx,cz){
+  const g=new THREE.Group(); g.position.set(cx,0,cz); scene.add(g);
+  const wood=0x6d4c2a, dark=0x3e2f23, roof=0x37424a, red=0xb71c1c;
+  g.add(at(MM(new THREE.BoxGeometry(11,.5,9),wood),0,.25,0));            // platform
+  g.add(at(MM(new THREE.BoxGeometry(10,3,8),0xefe6d0),0,2,0));           // walls
+  [[-5,-4],[5,-4],[-5,4],[5,4]].forEach(([x,z])=>g.add(at(MM(new THREE.BoxGeometry(.4,3.2,.4),dark),x,2.1,z)));  // posts
+  for(let i=-2;i<=2;i++){ g.add(at(MM(new THREE.BoxGeometry(1.7,2.6,.1),i%2?0xe8dcc0:0xd9c89e),i*1.8,1.9,4.05));
+    g.add(at(MM(new THREE.BoxGeometry(.1,2.6,.12),dark),i*1.8-.85,1.9,4.08)); }   // sliding doors
+  const r1=MM(new THREE.ConeGeometry(9.5,2.6,4),roof); r1.rotation.y=Math.PI/4; r1.position.y=4.8; g.add(r1);   // roof tier 1
+  const r2=MM(new THREE.ConeGeometry(6,1.8,4),roof); r2.rotation.y=Math.PI/4; r2.position.y=6.4; g.add(r2);     // tier 2
+  g.add(at(MM(new THREE.BoxGeometry(.3,.3,9.8),red),0,6.0,0));           // ridge
+  g.add(at(MM(new THREE.BoxGeometry(2.4,1,.08),0xffffff),0,3.4,4.12));   // banner
+  const sun=MM(new THREE.CylinderGeometry(.42,.42,.05,16),0xc62828); sun.rotation.x=Math.PI/2; sun.position.set(0,3.4,4.18); g.add(sun);
+  g.add(at(makeSignBoard('DOJO','Karate','#ab47bc'),0,0,5.8));
+  colliders.push({x:cx,z:cz,r:5.5});
+  return g;
+}
 
 // ─── TOWN ─────────────────────────────────────────────────────────────────────
 (function buildTown(){
@@ -330,19 +551,38 @@ function rot(m,x,y,z){ m.rotation.set(x||0,y||0,z||0); return m; }
     const b=MM(new THREE.BoxGeometry(.6,.1,BOUND*2),0xbdbdbd,false); b.position.set(o,.06,0); scene.add(b);
   });
 
-  const hC=[0xef9a9a,0x90caf9,0xa5d6a7,0xffcc80,0xce93d8,0x80deea,0xffab91,0xb39ddb]; let hi=0;
-  const spots=[
-    [-22,-22],[-12,-24],[-24,-12],[22,-22],[12,-24],[24,-12],
-    [-30,0],[30,-4],[0,-30]
+  const hC=[0xef9a9a,0x90caf9,0xa5d6a7,0xffcc80,0xce93d8,0x80deea,0xffab91,0xb39ddb,0xc5e1a5,0xff8a80];
+  // Each house is a portal to one minigame. (level files mapped from the menu cards)
+  // Houses (8). Sawyer + Wyatt live in the park as a unicorn statue + a pond instead.
+  const DEST=[
+    {name:'Dawson',    sub:'Soccer',         file:'levels/level1.html',    accent:'#4caf50'},
+    {name:'TJ',        sub:'Web Slinger',    file:'levels/level2.html',    accent:'#cc1111'},
+    {name:'Marshall',  sub:'Violin Hero',    file:'levels/level3.html',    accent:'#7b1fa2'},
+    {name:'Brady',     sub:'Skate Park',     file:'levels/level4.html',    accent:'#f57c00'},
+    {name:'Brooklynn', sub:'Art Studio',     file:'levels/level5.html',    accent:'#e91e63'},
+    {name:'Mackayla',  sub:'Karate Dojo',    file:'levels/level6.html',    accent:'#ab47bc'},
+    {name:'Stephanie', sub:'Ring Rally',     file:'levels/stephanie.html', accent:'#d32f2f'},
   ];
-  spots.forEach(([x,z])=>{
-    const g=new THREE.Group(); const col=hC[hi++%hC.length];
+  const spots=[
+    [-22,-22],[-12,-26],[-26,-12],[22,-22],[12,-26],[26,-12],[-4,-30]
+  ];
+  spots.forEach(([x,z],i)=>{
+    const d=DEST[i%DEST.length];
+    // House (its own object — just the building).
+    const g=new THREE.Group(); const col=hC[i%hC.length];
     g.add(at(MM(new THREE.BoxGeometry(7,5,6),col),0,2.5,0));
     const roof=MM(new THREE.ConeGeometry(5.6,2.6,4),0x6d4c41); roof.position.y=6.3; roof.rotation.y=Math.PI/4; g.add(roof);
-    g.add(at(MM(new THREE.BoxGeometry(1.3,2.2,.14),0x4e342e),0,1.1,3.0));
+    g.add(at(MM(new THREE.BoxGeometry(1.6,2.6,.18),0x4e342e),0,1.3,3.0));   // door
     [-1.9,1.9].forEach(wx=> g.add(at(MM(new THREE.BoxGeometry(1.4,1.3,.12),0x81d4fa),wx,3.2,3.02)));
-    g.position.set(x,0,z); scene.add(g);
+    const ry=Math.atan2(-x,-z); g.position.set(x,0,z); g.rotation.y=ry; scene.add(g);
     colliders.push({x,z,r:4.6});
+    // Portal marker — a SEPARATE object in front of the door, so it can be moved
+    // independently of the house in the editor (trigger follows its pad).
+    const fwx=x+Math.sin(ry)*5.2, fwz=z+Math.cos(ry)*5.2;
+    const fx=makePortalFx(d.accent);
+    fx.group.add(at(makeSignBoard(d.name,d.sub,d.accent),0,0,-1.6));
+    fx.group.position.set(fwx,0,fwz); fx.group.rotation.y=ry; scene.add(fx.group);
+    portals.push({x:fwx, z:fwz, file:d.file, name:d.name, sub:d.sub, pad:fx.pad, halo:fx.halo});
   });
 
   // ── PARK (in +x,+z quadrant) ──
@@ -377,6 +617,13 @@ function rot(m,x,y,z){ m.rotation.set(x||0,y||0,z||0); return m; }
 
   g_swings(px+11,pz-2); colliders.push({x:px+11,z:pz-2,r:1.8});
   g_slide(px-11,pz+2);  colliders.push({x:px-11,z:pz+2,r:1.6});
+
+  // Sawyer (unicorn statue, in the park) + Wyatt (fishing pond, just east of the park)
+  buildUnicornStatue(px, pz+11, {name:'Sawyer', sub:'Unicorn Flight', file:'levels/level8.html', accent:'#9c27b0'});
+  buildPond(px+22, pz,         {name:'Wyatt',  sub:'Fishing',        file:'levels/level7.html', accent:'#1565c0'});
+  buildGraveyard(px+40, pz, {name:'Tyler', sub:'Last Stand', file:'tyler.html', accent:'#ffd54f'});   // graveyard east of park + Tyler portal
+  buildSchool(-46, -12);   // school complex southwest of the skatepark
+  buildDojo(40, -40);      // dojo in an open area (move it wherever)
 
   for(let t=-BOUND;t<=BOUND;t+=3){
     [[t,-BOUND],[t,BOUND],[-BOUND,t],[BOUND,t]].forEach(([x,z])=>{
@@ -456,12 +703,13 @@ function groundHeightAt(x,z){
   return h;
 }
 (function buildSkatepark(){
+  const sk=new THREE.Group(); scene.add(sk);   // one object so it can't fragment / drift
   const concrete=()=>new THREE.MeshLambertMaterial({color:0x9aa0a6,side:THREE.DoubleSide});
   const A=SK.fb+SK.R+SK.deckW;
   // ground pad
   const pad=new THREE.Mesh(new THREE.BoxGeometry((A+1.5)*2,.2,(SK.L+5)*2),
     new THREE.MeshLambertMaterial({color:0x7f8489}));
-  pad.position.set(SK.x,.1,SK.z-1); pad.receiveShadow=true; scene.add(pad);
+  pad.position.set(SK.x,.1,SK.z-1); pad.receiveShadow=true; sk.add(pad);
   // half-pipe surface (extrude U cross-section along z)
   const shape=new THREE.Shape();
   const pts=[];
@@ -472,11 +720,11 @@ function groundHeightAt(x,z){
   const geo=new THREE.ExtrudeGeometry(shape,{depth:SK.L*2,bevelEnabled:false});
   const pipe=new THREE.Mesh(geo,concrete());
   pipe.rotation.x=0; pipe.position.set(SK.x,0,SK.z-SK.L); // extrude runs +z from here
-  pipe.castShadow=pipe.receiveShadow=true; scene.add(pipe);
+  pipe.castShadow=pipe.receiveShadow=true; sk.add(pipe);
   // coping rails (color the lips)
   [-1,1].forEach(s=>{
     const c=MM(new THREE.CylinderGeometry(.09,.09,SK.L*2,8),0xff5252);
-    c.rotation.x=Math.PI/2; c.position.set(SK.x+s*(SK.fb+SK.R),SK.R,SK.z); scene.add(c);
+    c.rotation.x=Math.PI/2; c.position.set(SK.x+s*(SK.fb+SK.R),SK.R,SK.z); sk.add(c);
   });
   // kicker ramps (wedge = extruded right triangle)
   KICKERS.forEach(k=>{
@@ -486,11 +734,11 @@ function groundHeightAt(x,z){
     const m=new THREE.Mesh(g,concrete());
     m.rotation.y=-Math.PI/2 + (k.flip?Math.PI:0);
     m.position.set(k.x + (k.flip?-k.w/2:k.w/2), 0, k.z);
-    m.castShadow=m.receiveShadow=true; scene.add(m);
+    m.castShadow=m.receiveShadow=true; sk.add(m);
   });
   // little welcome sign
-  scene.add(at(MM(new THREE.BoxGeometry(3,.7,.12),0x37474f),SK.x,1.6,SK.z-SK.L-3));
-  scene.add(at(MM(new THREE.BoxGeometry(.14,1.6,.14),0x607d8b),SK.x,.8,SK.z-SK.L-3));
+  sk.add(at(MM(new THREE.BoxGeometry(3,.7,.12),0x37474f),SK.x,1.6,SK.z-SK.L-3));
+  sk.add(at(MM(new THREE.BoxGeometry(.14,1.6,.14),0x607d8b),SK.x,.8,SK.z-SK.L-3));
 })();
 
 // ─── KID MODEL ────────────────────────────────────────────────────────────────
@@ -584,6 +832,16 @@ function customizeKid(cfg,parts,body,m,BG){
       add(.06,.02,.02,0x3a3a3a,-.19,1.74,.1);   // temples
       add(.06,.02,.02,0x3a3a3a, .19,1.74,.1);
       break; }
+    case'tyler':{        // grown-up: beard + fringe + jacket hem, holds a water gun
+      add(.48,.1,.06,cfg.hair,0,1.86,.21);     // fringe
+      add(.44,.16,.1,cfg.hair,0,1.56,.17);     // beard
+      add(.54,.14,.34,0x2a363d,0,.86,0);       // jacket hem
+      const gun=new THREE.Group(); gun.position.set(-.34,.8,.12); body.add(gun);
+      gun.add(m(new BG(.1,.12,.34),0x2e7d32,0,0,.1));        // body
+      gun.add(m(new BG(.07,.07,.22),0xff8f00,0,.01,.3));     // barrel
+      const tank=MM(new THREE.CylinderGeometry(.07,.07,.2,8),0x4fc3f7);
+      tank.rotation.x=Math.PI/2; tank.position.set(0,.09,0); gun.add(tank);   // water tank
+      break; }
   }
 }
 
@@ -650,6 +908,114 @@ function setRide(group,type){
   if(group.userData.body) group.userData.body.position.y=lift;
 }
 
+// ─── HELD GADGETS (catalog) ───────────────────────────────────────────────────
+function buildHold(type){
+  if(!type||type==='none') return null;
+  const g=new THREE.Group();
+  if(type==='watergun'){
+    g.add(at(MM(new THREE.BoxGeometry(.1,.12,.34),0x2e7d32),0,0,.12));        // body
+    g.add(at(MM(new THREE.BoxGeometry(.07,.07,.22),0xff8f00),0,.01,.32));     // barrel
+    const tank=MM(new THREE.CylinderGeometry(.07,.07,.2,8),0x4fc3f7);
+    tank.rotation.x=Math.PI/2; tank.position.set(0,.1,.02); g.add(tank);      // water tank
+    g.add(at(MM(new THREE.BoxGeometry(.08,.16,.1),0x1b5e20),0,-.12,0));        // grip
+  } else if(type==='webshooter'){
+    g.add(at(MM(new THREE.BoxGeometry(.16,.1,.16),0xcc1111),0,0,0));           // wrist device
+    g.add(at(MM(new THREE.CylinderGeometry(.03,.03,.12,8),0xeeeeee),0,0,.12)); // nozzle
+  } else if(type==='violin'){
+    g.add(at(MM(new THREE.BoxGeometry(.17,.06,.42),0x6d3a1f),0,0,0));          // body
+    g.add(at(MM(new THREE.BoxGeometry(.05,.05,.24),0x3e2418),0,0,-.32));       // neck
+    g.add(at(MM(new THREE.BoxGeometry(.02,.02,.42),0x111111),0,.04,0));        // strings
+  } else if(type==='bow'){
+    const stick=at(MM(new THREE.CylinderGeometry(.012,.012,.5,6),0xede0c8),0,0,0);
+    stick.rotation.x=Math.PI/2; g.add(stick);
+  }
+  return g;
+}
+// Attach a gadget to the kid's hand(s). Independent of rides — you can hold + ride.
+function setHold(group,type){
+  type=type||'none';
+  const parts=group.userData.parts, body=group.userData.body; if(!parts) return;
+  (group.userData.holds||[]).forEach(o=>{ if(o.parent) o.parent.remove(o); });
+  group.userData.holds=[]; group.userData.holdType=type;
+  if(type==='none') return;
+  if(type==='violin'){     // tucked under chin + bow in the right hand
+    const v=buildHold('violin'); v.position.set(.28,1.5,.16); v.rotation.y=.2;
+    (body||group).add(v); group.userData.holds.push(v);
+    const bow=buildHold('bow'); bow.position.set(0,-.7,.16);
+    parts.rAP.add(bow); group.userData.holds.push(bow);
+    return;
+  }
+  const place=(arm)=>{ const h=buildHold(type); if(!h) return;
+    h.position.set(0, type==='webshooter'?-.72:-.74, type==='webshooter'?.04:.08);
+    arm.add(h); group.userData.holds.push(h); };
+  place(parts.rAP);
+  if(type==='webshooter') place(parts.lAP);   // web shooters on both wrists
+}
+
+// ─── GADGET AUDIO + EFFECTS ───────────────────────────────────────────────────
+let _ac=null;
+function ac(){ if(!_ac){ try{ _ac=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(_ac&&_ac.state==='suspended') _ac.resume(); return _ac; }
+function tone(freq,t0,dur,type,gain){ const a=ac(); if(!a) return;
+  const o=a.createOscillator(), g=a.createGain(); o.type=type||'sine'; o.frequency.value=freq;
+  o.connect(g); g.connect(a.destination); const t=a.currentTime+t0;
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain||.2,t+.02);
+  g.gain.exponentialRampToValueAtTime(.0001,t+dur); o.start(t); o.stop(t+dur+.03); }
+function sfxSpray(){ const a=ac(); if(!a) return; const dur=.4;
+  const buf=a.createBuffer(1,Math.floor(a.sampleRate*dur),a.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+  const src=a.createBufferSource(); src.buffer=buf;
+  const f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=1800;
+  const g=a.createGain(); g.gain.value=.25; src.connect(f); f.connect(g); g.connect(a.destination); src.start(); }
+function sfxWeb(){ const a=ac(); if(!a) return; const o=a.createOscillator(), g=a.createGain();
+  o.type='sawtooth'; o.frequency.setValueAtTime(900,a.currentTime);
+  o.frequency.exponentialRampToValueAtTime(180,a.currentTime+.18);
+  g.gain.setValueAtTime(.2,a.currentTime); g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+.2);
+  o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+.22); }
+const VIOLIN_SCALE=[262,294,330,349,392,440,494,523,587,659];   // C major run
+const VIOLIN_TUNES=[[0,2,4,5,7],[7,5,4,2,0],[0,4,7,4,0,2],[0,0,7,7,9,9,7],[4,2,0,2,4,4,4],[2,4,5,7,5,4,2]];
+function playViolinTune(){ const tune=VIOLIN_TUNES[Math.floor(Math.random()*VIOLIN_TUNES.length)];
+  let t=0; tune.forEach(n=>{ tone(VIOLIN_SCALE[n%VIOLIN_SCALE.length],t,.32,'sawtooth',.16); t+=.28; }); }
+
+const fx=[];   // transient particles: {m,vx,vy,vz,life,grav,spin}
+function forwardOf(group){ const ry=group.rotation.y; return {x:Math.sin(ry),z:Math.cos(ry)}; }
+function spawnWater(group){ const f=forwardOf(group), ox=group.position.x+f.x*.5, oz=group.position.z+f.z*.5;
+  for(let i=0;i<12;i++){ const m=MM(new THREE.SphereGeometry(.06,5,4),0x4fc3f7); m.position.set(ox,1.4,oz); scene.add(m);
+    const spd=3+Math.random()*3;
+    fx.push({m,vx:f.x*spd+(Math.random()-.5),vy:2+Math.random()*1.5,vz:f.z*spd+(Math.random()-.5),life:.9,grav:true}); } }
+function spawnWeb(group){ const f=forwardOf(group), ox=group.position.x+f.x*.5, oz=group.position.z+f.z*.5;
+  const head=MM(new THREE.SphereGeometry(.12,6,5),0xffffff); head.position.set(ox,1.4,oz); scene.add(head);
+  fx.push({m:head,vx:f.x*14,vy:0,vz:f.z*14,life:.5,grav:false});
+  for(let i=1;i<=4;i++){ const t=MM(new THREE.SphereGeometry(.05,5,4),0xeeeeee);
+    t.position.set(ox-f.x*i*.3,1.4,oz-f.z*i*.3); scene.add(t);
+    fx.push({m:t,vx:f.x*10,vy:0,vz:f.z*10,life:.35,grav:false}); } }
+function spawnNotes(group){ const cols=[0xffd54f,0xf06292,0x80cbc4,0x9575cd];
+  for(let i=0;i<6;i++){ const m=MM(new THREE.BoxGeometry(.1,.15,.02),cols[i%cols.length]);
+    m.position.set(group.position.x+(Math.random()-.5),1.9,group.position.z+(Math.random()-.5)); scene.add(m);
+    fx.push({m,vx:(Math.random()-.5)*.6,vy:1+Math.random(),vz:(Math.random()-.5)*.6,life:1.3,grav:false,spin:true}); } }
+function updateFx(dt){ for(let i=fx.length-1;i>=0;i--){ const p=fx[i]; p.life-=dt;
+    if(p.life<=0){ scene.remove(p.m); fx.splice(i,1); continue; }
+    if(p.grav) p.vy-=9*dt;
+    p.m.position.x+=p.vx*dt; p.m.position.y+=p.vy*dt; p.m.position.z+=p.vz*dt;
+    if(p.m.position.y<.05){ p.m.position.y=.05; p.vy=0; p.vx*=.6; p.vz*=.6; }
+    if(p.spin) p.m.rotation.z+=dt*6;
+    p.m.scale.setScalar(Math.max(.02,Math.min(1,p.life*2))); } }
+
+// Run a gadget's effect for any actor (local or remote).
+function playGadget(group,type){
+  if(type==='watergun'){ sfxSpray(); spawnWater(group); }
+  else if(type==='webshooter'){ sfxWeb(); spawnWeb(group); }
+  else if(type==='violin'){ playViolinTune(); spawnNotes(group); }
+}
+let lastUse=0;
+function useGadget(){ if(!me) return; const type=me.group.userData.holdType||'none';
+  if(type==='none') return;
+  const now=performance.now(), cd=(type==='violin')?1600:300;
+  if(now-lastUse<cd) return; lastUse=now;
+  playGadget(me.group,type);
+  if(netOn) send({t:'use',hold:type});
+}
+
 function makeLabel(text){
   const cv=document.createElement('canvas'); cv.width=256; cv.height=64;
   const cx=cv.getContext('2d');
@@ -691,7 +1057,7 @@ let me=null; // {group,pos,facing,char,name,walkPhase}
 function spawnLocal(cfg,name){
   const group=buildKid(cfg); group.add(makeLabel(name));
   scene.add(group);
-  me={group,pos:new THREE.Vector3(0,0,9),facing:Math.PI,char:cfg.id,name,walkPhase:0,ride:'none',vy:0,onGround:true};
+  me={group,pos:new THREE.Vector3(0,0,9),facing:Math.PI,char:cfg.id,name,walkPhase:0,ride:'none',hold:'none',vy:0,onGround:true};
   group.position.copy(me.pos); group.rotation.y=me.facing;
 }
 
@@ -715,6 +1081,7 @@ function addRemote(id,p){
   const group=buildKid(cfg); group.add(makeLabel(p.name||'Player'));
   group.position.set(p.x||0,0,p.z||0); group.rotation.y=p.ry||0;
   if(p.ride&&p.ride!=='none') setRide(group,p.ride);
+  if(p.hold&&p.hold!=='none') setHold(group,p.hold);
   scene.add(group);
   remotes.set(id,{group,name:p.name||'Player',target:{x:p.x||0,y:p.y||0,z:p.z||0,ry:p.ry||0},walkPhase:0,lastMove:0});
   if(started) addChat(null,(p.name||'Player')+' joined the town',true);
@@ -739,7 +1106,7 @@ function connect(){
   try { ws=new WebSocket(WS_URL); } catch(e){ return; }
   ws.onopen=()=>{
     netOn=true; setNet(true);
-    send({t:'join',name:me.name,char:me.char,x:me.pos.x,z:me.pos.z,ry:me.facing,ride:me.ride});
+    send({t:'join',name:me.name,char:me.char,x:me.pos.x,z:me.pos.z,ry:me.facing,ride:me.ride,hold:me.hold});
   };
   ws.onmessage=ev=>{
     let msg; try{ msg=JSON.parse(ev.data);}catch(e){return;}
@@ -747,18 +1114,49 @@ function connect(){
       case'init':
         myId=msg.id;
         (msg.players||[]).forEach(pl=>{ if(pl.id!==myId) addRemote(pl.id,pl); });
+        (msg.objs||[]).forEach(addRemoteObject);   // objects already in the world
         break;
+      case'place': if(msg.owner!==myId) addRemoteObject(msg.obj); break;
+      case'reject': edInfo(msg.reason||'Placement rejected by server.'); break;
       case'join': if(msg.player.id!==myId) addRemote(msg.player.id,msg.player); break;
       case'pos':  if(msg.id!==myId) moveRemote(msg.id,msg); break;
       case'leave': removeRemote(msg.id); break;
       case'count': if(typeof msg.n==='number') setCount(msg.n); break;
       case'ride': if(msg.id!==myId){ const r=remotes.get(msg.id); if(r) setRide(r.group,msg.ride); } break;
+      case'hold': if(msg.id!==myId){ const r=remotes.get(msg.id); if(r) setHold(r.group,msg.hold); } break;
+      case'use': if(msg.id!==myId){ const r=remotes.get(msg.id); if(r) playGadget(r.group,msg.hold); } break;
       case'chat': if(msg.id!==myId){ addChat(msg.name||'Player',String(msg.text||''),false);
         const rc=remotes.get(msg.id); if(rc) showBubble(rc.group,String(msg.text||'')); } break;
     }
   };
   ws.onclose=()=>{ netOn=false; setNet(false); remotes.forEach((_,id)=>removeRemote(id)); };
   ws.onerror=()=>{ try{ws.close();}catch(e){} };
+}
+function enterPortal(){ if(!nearPortal) return;
+  if(window.Hub) Hub.enterLevel(nearPortal.file); else location.href=nearPortal.file; }
+function updatePortals(){
+  const t=performance.now()*.003;
+  let best=null,bd=9;   // generous: prompt shows when you're anywhere near the portal (nearest wins)
+  let gNear=null,gDist=Infinity;   // absolute nearest (for debug)
+  portals.forEach(p=>{
+    // follow the pad's LIVE world position so moving a portal in the editor moves its trigger
+    let wx=p.x, wz=p.z;
+    if(p.pad){ p.pad.getWorldPosition(_portalWP); wx=_portalWP.x; wz=_portalWP.z;
+      p.pad.material.opacity=.42+Math.sin(t*1.6+wx)*.18; }
+    if(p.halo) p.halo.rotation.z=t;
+    if(me&&started){ const d=Math.hypot(me.pos.x-wx,me.pos.z-wz);
+      if(d<gDist){ gDist=d; gNear=p; }
+      if(d<bd){ bd=d; best=p; } }
+  });
+  const dbg=document.getElementById('portal-debug');
+  if(dbg){ dbg.textContent= !me?'no me':!started?'not started':
+    ('portals:'+portals.length+'  me:'+me.pos.x.toFixed(1)+','+me.pos.z.toFixed(1)
+     +'\nnearest:'+(gNear?gNear.name:'-')+'  d:'+gDist.toFixed(1)+'  edit:'+editMode); }
+  nearPortal=(!editMode&&started)?best:null;
+  const el=document.getElementById('portal-prompt');
+  if(nearPortal){ el.style.display='block';
+    el.innerHTML='Press <b>E</b> / ▶ to play <b>'+nearPortal.name+'</b> — '+nearPortal.sub; }
+  else el.style.display='none';
 }
 function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
 function setNet(on){
@@ -780,7 +1178,8 @@ function maybeSendPos(){
 
 // ─── CAMERA ───────────────────────────────────────────────────────────────────
 let camTheta=0,camPhi=.4,rmb=false,lmx=0,lmy=0;
-const CAM_DIST=8.5;
+let camDist=8.5;
+const CAM_MIN=4, CAM_MAX=16;   // pinch-zoom limits
 const camWant=new THREE.Vector3(), camTgt=new THREE.Vector3();
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('contextmenu',e=>e.preventDefault());   // disable default right-click menu everywhere
@@ -797,9 +1196,9 @@ addEventListener('mousemove',e=>{ if(!rmb)return;
 function updateCamera(dt){
   if(!me) return;
   const px=me.pos.x, py=me.pos.y+1.2, pz=me.pos.z;
-  camWant.set(px+Math.sin(camTheta)*Math.cos(camPhi)*CAM_DIST,
-              py+Math.sin(camPhi)*CAM_DIST,
-              pz+Math.cos(camTheta)*Math.cos(camPhi)*CAM_DIST);
+  camWant.set(px+Math.sin(camTheta)*Math.cos(camPhi)*camDist,
+              py+Math.sin(camPhi)*camDist,
+              pz+Math.cos(camTheta)*Math.cos(camPhi)*camDist);
   const a=1-Math.pow(.005,dt);
   camera.position.lerp(camWant,a);
   camTgt.lerp(new THREE.Vector3(px,py,pz),a);
@@ -836,10 +1235,14 @@ let started=false;
 const JUMP_V=7.2, GRAV=20;
 function tryJump(){ if(me&&me.onGround){ me.vy=JUMP_V; me.onGround=false; } }
 addEventListener('keydown',e=>{
+  if(e.code==='F3'){ e.preventDefault(); const d=document.getElementById('portal-debug');
+    if(d) d.style.display=(d.style.display==='none')?'block':'none'; return; }
   if(!started) return;
   if(e.target&&e.target.tagName==='INPUT') return; // typing (chat) — ignore movement
   if(e.code==='Enter'){ chatInput.focus(); return; }
-  if(e.code==='KeyC'){ toggleCatalog(); return; }
+  if(e.code==='KeyC' && !editMode && !(e.ctrlKey||e.metaKey)){ toggleCatalog(); return; }
+  if(e.code==='KeyF'){ e.preventDefault(); useGadget(); return; }
+  if(e.code==='KeyE'&&!editMode){ if(nearPortal) enterPortal(); return; }
   if(e.code==='Space'){ e.preventDefault(); if(editMode) freeCam.back=true; else tryJump(); return; }
   if(e.code==='Escape'){ closeCatalog(); document.getElementById('confirm-quit').style.display='none'; return; }
   switch(e.code){
@@ -870,7 +1273,8 @@ let selected=null;
 const grid=document.getElementById('char-grid');
 const enterBtn=document.getElementById('enter-btn');
 const nameInput=document.getElementById('name-input');
-nameInput.value='Player'+Math.floor(Math.random()*1000);
+nameInput.value=(window.Hub&&Hub.getName())||('Player'+Math.floor(Math.random()*1000));
+const charEls=[];
 CHARS.forEach(c=>{
   const el=document.createElement('div'); el.className='char'; el.style.setProperty('--accent',c.accent);
   el.innerHTML=`<div class="emoji">${c.emoji}</div><div class="nm">${c.name}</div>`;
@@ -878,11 +1282,20 @@ CHARS.forEach(c=>{
     document.querySelectorAll('.char').forEach(x=>x.classList.remove('sel'));
     el.classList.add('sel'); selected=c; enterBtn.classList.add('ready');
   });
-  grid.appendChild(el);
+  grid.appendChild(el); charEls.push(el);
 });
+// Remember the player's last character: preselect it, and if we just came back
+// from a minigame, walk straight into town with the same name + character.
+(function restoreIdentity(){
+  if(!window.Hub) return;
+  const savedId=Hub.getChar(); const idx=CHARS.findIndex(c=>c.id===savedId);
+  if(idx>=0){ charEls[idx].classList.add('sel'); selected=CHARS[idx]; enterBtn.classList.add('ready');
+    if(Hub.isReturning()) setTimeout(()=>enterBtn.click(),0); }
+})();
 enterBtn.addEventListener('click',()=>{
   if(!selected) return;
   const name=(nameInput.value||'Player').slice(0,12);
+  if(window.Hub) Hub.setIdentity(name,selected.id);   // remember across minigames
   document.getElementById('select').style.display='none';
   spawnLocal(selected,name);
   started=true;
@@ -895,6 +1308,9 @@ enterBtn.addEventListener('click',()=>{
     Mobile.button({label:'JUMP',code:'Space'});
     Mobile.button({label:'RUN',code:'ShiftLeft'});
     Mobile.button({label:'🎒',code:'KeyC'});  // catalog
+    Mobile.button({label:'USE',code:'KeyF'});  // use held gadget
+    Mobile.button({label:'▶',code:'KeyE'});    // enter portal when near one
+    Mobile.pinch(r=>{ camDist=Math.max(CAM_MIN,Math.min(CAM_MAX, camDist/r)); });  // two-finger zoom
   }
 });
 
@@ -904,7 +1320,11 @@ function markRideSel(){
   const cur=me?me.group.userData.rideType:'none';
   document.querySelectorAll('#rides button').forEach(b=>b.classList.toggle('sel',b.dataset.ride===cur));
 }
-function openCatalog(){ if(!started) return; markRideSel(); catalogEl.style.display='flex'; }
+function markHoldSel(){
+  const cur=me?me.group.userData.holdType||'none':'none';
+  document.querySelectorAll('#gadgets button').forEach(b=>b.classList.toggle('sel',b.dataset.hold===cur));
+}
+function openCatalog(){ if(!started) return; markRideSel(); markHoldSel(); catalogEl.style.display='flex'; }
 function closeCatalog(){ catalogEl.style.display='none'; }
 function toggleCatalog(){ catalogEl.style.display==='flex'?closeCatalog():openCatalog(); }
 document.getElementById('catalog-close').addEventListener('click',closeCatalog);
@@ -912,6 +1332,11 @@ document.querySelectorAll('#rides button').forEach(b=>b.addEventListener('click'
   const type=b.dataset.ride;
   setRide(me.group,type); me.ride=type; markRideSel();
   send({t:'ride',ride:type});
+}));
+document.querySelectorAll('#gadgets button').forEach(b=>b.addEventListener('click',()=>{
+  const type=b.dataset.hold;
+  setHold(me.group,type); me.hold=type; markHoldSel();
+  send({t:'hold',hold:type});
 }));
 
 // ─── QUIT CONFIRM ─────────────────────────────────────────────────────────────
@@ -1080,12 +1505,91 @@ const CATALOG={
     g.add(at(MM(new THREE.BoxGeometry(1.6,.3,1.6),0x6d4c2a),0,.15,0));
     [[-.4,-.4,0xe91e63],[.4,-.4,0xffeb3b],[-.4,.4,0xff7043],[.4,.4,0xab47bc]].forEach(([x,z,c])=>{
       g.add(at(MM(new THREE.SphereGeometry(.22,6,5),c),x,.5,z)); }); return g; },
+  // ── level-builder pieces ──
+  car(){ const g=new THREE.Group(); const col=[0xe53935,0x1565c0,0xfdd835,0x43a047,0x37474f][Math.floor(Math.random()*5)];
+    g.add(at(MM(new THREE.BoxGeometry(1.8,.7,3.4),col),0,.6,0));
+    g.add(at(MM(new THREE.BoxGeometry(1.6,.7,1.8),col),0,1.15,-.2));
+    g.add(at(MM(new THREE.BoxGeometry(1.5,.5,1.6),0x263238),0,1.16,-.2));
+    [[-.9,1.1],[.9,1.1],[-.9,-1.1],[.9,-1.1]].forEach(([wx,wz])=>{ const w=MM(new THREE.CylinderGeometry(.35,.35,.3,10),0x111);
+      w.rotation.z=Math.PI/2; w.position.set(wx,.35,wz); g.add(w); }); return g; },
+  concrete(){ return at(MM(new THREE.BoxGeometry(3,.12,3),0x9e9e9e),0,.06,0); },
+  road(){ const g=new THREE.Group();
+    g.add(at(MM(new THREE.BoxGeometry(4,.1,4),0x3a3d42),0,.05,0));
+    for(let z=-1.2;z<=1.2;z+=1.2) g.add(at(MM(new THREE.BoxGeometry(.3,.02,.7),0xffe082,false),0,.11,z)); return g; },
+  crosswalk(){ const g=new THREE.Group();
+    g.add(at(MM(new THREE.BoxGeometry(4,.1,3),0x3a3d42),0,.05,0));
+    for(let x=-1.4;x<=1.4;x+=.7) g.add(at(MM(new THREE.BoxGeometry(.4,.02,2.4),0xffffff,false),x,.11,0)); return g; },
+  hoop(){ const g=new THREE.Group();
+    g.add(at(MM(new THREE.CylinderGeometry(.12,.12,4,8),0xb0bec5),0,2,0));
+    g.add(at(MM(new THREE.BoxGeometry(1.8,1.2,.12),0xffffff),0,3.4,.6));
+    const rim=MM(new THREE.TorusGeometry(.35,.05,8,16),0xff6f00); rim.rotation.x=Math.PI/2; rim.position.set(0,3.0,.95); g.add(rim); return g; },
+  fence(){ const g=new THREE.Group();
+    [-1.2,1.2].forEach(x=>g.add(at(MM(new THREE.BoxGeometry(.16,1.2,.16),0x9e9e9e),x,.6,0)));
+    [.95,.45].forEach(y=>g.add(at(MM(new THREE.BoxGeometry(2.4,.1,.1),0xbdbdbd),0,y,0))); return g; },
+  hedge(){ return at(MM(new THREE.BoxGeometry(3,1,.9),0x2e7d32),0,.5,0); },
+  gravestone(){ const g=new THREE.Group();
+    g.add(at(MM(new THREE.BoxGeometry(.8,1.0,.18),0x9e9e9e),0,.5,0));
+    const cap=MM(new THREE.CylinderGeometry(.4,.4,.18,12),0x9e9e9e); cap.rotation.x=Math.PI/2; cap.position.y=1.0; g.add(cap); return g; },
+  mailbox(){ const g=new THREE.Group();
+    g.add(at(MM(new THREE.BoxGeometry(.14,1.1,.14),0x5d4037),0,.55,0));
+    g.add(at(MM(new THREE.BoxGeometry(.4,.35,.6),0x1565c0),0,1.2,0)); return g; },
+  hydrant(){ const g=new THREE.Group();
+    g.add(at(MM(new THREE.CylinderGeometry(.22,.26,.8,10),0xe53935),0,.4,0));
+    g.add(at(MM(new THREE.SphereGeometry(.24,8,6),0xc62828),0,.85,0));
+    [-.28,.28].forEach(x=>g.add(at(MM(new THREE.CylinderGeometry(.08,.08,.18,8),0xc62828),x,.45,0))); return g; },
+  trafficlight(){ const g=new THREE.Group();
+    g.add(at(MM(new THREE.CylinderGeometry(.12,.14,4,8),0x37474f),0,2,0));        // pole
+    g.add(at(MM(new THREE.BoxGeometry(.6,1.7,.5),0x263238),0,3.7,0));             // housing
+    [[0xff1744,4.25],[0xffea00,3.65],[0x00e676,3.05]].forEach(([c,y])=>{
+      g.add(at(MM(new THREE.SphereGeometry(.18,10,8),c),0,y,.26)); });             // lamps
+    return g; },
+  musicstand(){ const g=new THREE.Group(); const m=0x23262b;
+    [0,2.09,4.19].forEach(a=>{ const l=MM(new THREE.CylinderGeometry(.03,.03,.95,6),m);
+      l.position.set(Math.sin(a)*.26,.32,Math.cos(a)*.26); l.rotation.set(Math.cos(a)*.32,0,-Math.sin(a)*.32); g.add(l); });
+    g.add(at(MM(new THREE.CylinderGeometry(.035,.035,1.25,8),m),0,1.0,0));            // pole
+    const desk=MM(new THREE.BoxGeometry(.72,.52,.04),m); desk.position.set(0,1.55,.06); desk.rotation.x=-.35; g.add(desk);
+    const ledge=MM(new THREE.BoxGeometry(.72,.05,.11),m); ledge.position.set(0,1.32,.13); ledge.rotation.x=-.35; g.add(ledge);
+    const sheet=MM(new THREE.BoxGeometry(.52,.38,.01),0xfafafa); sheet.position.set(0,1.56,.09); sheet.rotation.x=-.35; g.add(sheet);
+    return g; },
+  easel(){ const g=new THREE.Group(); const wood=0x8d6e3a;
+    [-.45,.45].forEach(x=>{ const l=MM(new THREE.CylinderGeometry(.05,.05,2.2,6),wood); l.position.set(x,1.05,.2); l.rotation.z=x>0?-.12:.12; g.add(l); });
+    const bl=MM(new THREE.CylinderGeometry(.05,.05,2.3,6),wood); bl.position.set(0,1.1,-.45); bl.rotation.x=.28; g.add(bl);
+    g.add(at(MM(new THREE.BoxGeometry(1.2,.08,.18),wood),0,.95,.22));                 // tray ledge
+    g.add(at(MM(new THREE.BoxGeometry(1.1,1.3,.06),0xfafafa),0,1.65,.16));            // canvas
+    g.add(at(MM(new THREE.BoxGeometry(.86,1.0,.02),0x90caf9),0,1.65,.2));             // painting sky
+    g.add(at(MM(new THREE.BoxGeometry(.86,.3,.03),0x66bb6a),0,1.25,.21));             // grass
+    g.add(at(MM(new THREE.SphereGeometry(.12,8,6),0xffeb3b),.24,1.95,.22));           // sun
+    return g; },
+  goal(){ const g=new THREE.Group(); const W=3.8,H=2.1,D=1.4,t=.1,c=0xf5f5f5;
+    [-W/2,W/2].forEach(x=>g.add(at(MM(new THREE.BoxGeometry(t,H,t),c),x,H/2,0)));         // front uprights
+    g.add(at(MM(new THREE.BoxGeometry(W+t,t,t),c),0,H,0));                                 // crossbar
+    [-W/2,W/2].forEach(x=>g.add(at(MM(new THREE.BoxGeometry(t,t,D),c),x,t/2,-D/2)));       // ground bars
+    [-W/2,W/2].forEach(x=>g.add(at(MM(new THREE.BoxGeometry(t,H*.55,t),c),x,H*.275,-D)));  // back posts
+    g.add(at(MM(new THREE.BoxGeometry(W+t,t,t),c),0,H*.55,-D));                            // back top bar
+    const netMat=new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:.16,side:THREE.DoubleSide});
+    const back=new THREE.Mesh(new THREE.PlaneGeometry(W,H*.55),netMat); back.position.set(0,H*.275,-D); g.add(back);
+    const roof=new THREE.Mesh(new THREE.PlaneGeometry(W,D*1.2),netMat); roof.rotation.x=-Math.PI/2.4; roof.position.set(0,H*.8,-D/2); g.add(roof);
+    [-1,1].forEach(s=>{ const side=new THREE.Mesh(new THREE.PlaneGeometry(D,H*.55),netMat); side.rotation.y=Math.PI/2; side.position.set(s*W/2,H*.275,-D/2); g.add(side); });
+    return g; },
+  // ── generic shapes (scale + recolor them) ──
+  box(){ return at(MM(new THREE.BoxGeometry(1,1,1),0xb0bec5),0,.5,0); },
+  ball(){ return at(MM(new THREE.SphereGeometry(.6,16,12),0xb0bec5),0,.6,0); },
+  cylinder(){ return at(MM(new THREE.CylinderGeometry(.5,.5,1,16),0xb0bec5),0,.5,0); },
+  pyramid(){ return at(MM(new THREE.ConeGeometry(.8,1.2,4),0xb0bec5),0,.6,0); },
+  slab(){ return at(MM(new THREE.BoxGeometry(2,.2,2),0xb0bec5),0,.1,0); },
+  wall(){ return at(MM(new THREE.BoxGeometry(3,1.6,.3),0xb0bec5),0,.8,0); },
 };
 const CAT_TYPES=Object.keys(CATALOG);
 
 let _eid=0;
 const editById=new Map();          // editId -> {obj,type,added,addEntry,group,groupEntry}
-let layout={ moves:{}, deletes:[], adds:[], groups:[] };
+let layout={ moves:{}, deletes:[], adds:[], groups:[], paint:{} };
+// Multiplayer placement: tag our add-ids so two players never mint the same id.
+const SESSION_TAG=Math.random().toString(36).slice(2,7);
+const myObjIds=new Set();           // ids I placed this session (for the 10-object cap)
+let lastPlaceMs=0;
+const MAX_OBJECTS=10, PLACE_COOLDOWN=1000;   // per-person live cap + ms between placements
+function edInfo(t){ const e=document.getElementById('ed-selinfo'); if(e) e.textContent=t; }
 let selSet=[], selHelpers=[], edSel=null, dragging=false;   // edSel = primary (last picked)
 let dragStartX=0, dragBefore=null, dragOffsets=null, dragRotStart=null, rotCentroid=null;
 const _ray=new THREE.Raycaster(), _ndc=new THREE.Vector2();
@@ -1099,6 +1603,20 @@ function doRedo(){ if(!redoStack.length) return; const c=redoStack.pop(); c.redo
 function updateUndoBtns(){ const u=document.getElementById('ed-undo'), r=document.getElementById('ed-redo');
   if(u) u.disabled=!undoStack.length; if(r) r.disabled=!redoStack.length; }
 function snap(o){ return {x:+o.position.x.toFixed(3),y:+o.position.y.toFixed(3),z:+o.position.z.toFixed(3),ry:+o.rotation.y.toFixed(3)}; }
+// grid snapping (placement + move)
+let GRID=1, gridOn=true;
+function gsnap(v){ return gridOn ? Math.round(v/GRID)*GRID : v; }
+// place mode with a ghost preview; scroll to rotate, click to drop (stays active)
+let placeType=null, ghost=null, ghostRot=0;
+function enterPlace(type){ if(!CATALOG[type]){ exitPlace(); return; }
+  if(ghost){ scene.remove(ghost); ghost=null; }   // swap ghost, keep dropdown selection
+  placeType=type; ghostRot=0;
+  ghost=CATALOG[type](); ghost.traverse(o=>{ o.userData.noEdit=true;
+    if(o.material){ o.material=o.material.clone(); o.material.transparent=true; o.material.opacity=.45; } });
+  ghost.position.set(0,0,0); scene.add(ghost);
+  edInfo('Click to place '+type+' — scroll to rotate, Esc to stop'); }
+function exitPlace(){ if(ghost){ scene.remove(ghost); ghost=null; } placeType=null;
+  const s=document.getElementById('ed-cat'); if(s&&s.value) s.value=''; }
 function applyXform(id,t){ const e=editById.get(id); if(!e) return;
   e.obj.position.set(t.x,t.y,t.z); e.obj.rotation.y=t.ry;
   if(e.group) Object.assign(e.groupEntry,t);
@@ -1114,9 +1632,15 @@ function multiXformCmd(beforeMap,afterMap){
 
 function isEditableRoot(o){ return o&&(o.isMesh||o.isGroup)&&!o.userData.noEdit&&!o.isLight; }
 function registerBase(){
+  // Stable ids derived from each object's BUILD position (registerBase runs before
+  // saved moves are applied). This keeps edits/groups glued to the right object even
+  // when new scenery is added later — positions don't renumber like a counter would.
   scene.children.slice().forEach(o=>{
     if(!isEditableRoot(o)||o.userData.editId!=null) return;
-    const id='b'+(_eid++); o.userData.editId=id;
+    o.getWorldPosition(_cwp);
+    let id='b'+Math.round(_cwp.x*10)+'_'+Math.round(_cwp.z*10)+'_'+Math.round(_cwp.y*10);
+    if(editById.has(id)){ let k=2; while(editById.has(id+'x'+k)) k++; id=id+'x'+k; }   // disambiguate co-located
+    o.userData.editId=id;
     editById.set(id,{obj:o,type:o.userData.editType||null,added:false});
   });
 }
@@ -1124,7 +1648,8 @@ function findRoot(o){ while(o){ if(o.userData&&o.userData.editId) return o; o=o.
 function editList(){ const a=[]; editById.forEach(e=>a.push(e.obj)); return a; }
 
 // ── collision: keep each object's hitbox (collider) glued to it as it moves ──
-const COL_R={ tree:.9, pine:1, bush:.7, barrel:.7, crate:.8, rock:.8, bench:1.2, lamp:.45, cone:.4, flowerbed:1.1, sign:.3 };
+const COL_R={ tree:.9, pine:1, bush:.7, barrel:.7, crate:.8, rock:.8, bench:1.2, lamp:.45, cone:.4, flowerbed:1.1, sign:.3,
+  car:1.6, hoop:.4, gravestone:.5, mailbox:.3, hydrant:.35, hedge:1.0, easel:.5, musicstand:.3, trafficlight:.4 };
 const _cwp=new THREE.Vector3();
 function addColliderFor(o,type){ const r=COL_R[type]; if(!r) return;
   o.getWorldPosition(_cwp); colliders.push({x:_cwp.x,z:_cwp.z,r,obj:o}); }
@@ -1176,18 +1701,38 @@ function updateGroupBtns(){ const g=document.getElementById('ed-group'), u=docum
   if(u){ const e=edSel&&editById.get(edSel.userData.editId); u.disabled=!(selSet.length===1&&e&&e.group); }
 }
 function addObject(type,x,z,opts){ opts=opts||{};
+  // In multiplayer, throttle placements and cap how many each person owns.
+  // In multiplayer, throttle placements and cap how many each person owns.
+  // The editor (opts.editor — copy/paste, etc.) is host work, so it skips the limit.
+  if(netOn && !opts.editor){
+    if(performance.now()-lastPlaceMs<PLACE_COOLDOWN){ edInfo('Slow down — 1 second between placements.'); return null; }
+    if(myObjIds.size>=MAX_OBJECTS){ edInfo('Limit reached — '+MAX_OBJECTS+' objects per person.'); return null; }
+  }
   const o=CATALOG[type](opts.text); o.position.set(x,0,z);
-  const id='a'+(_eid++); o.userData.editId=id; o.userData.editType=type; scene.add(o);
+  const id='a'+SESSION_TAG+(_eid++); o.userData.editId=id; o.userData.editType=type; scene.add(o);
   const entry={id,type,x:+x.toFixed(3),y:0,z:+z.toFixed(3),ry:0};
   if(type==='sign') entry.text=o.userData.signText;
   layout.adds.push(entry); addColliderFor(o,type);
-  editById.set(id,{obj:o,type,added:true,addEntry:entry}); setSel(o);
+  editById.set(id,{obj:o,type,added:true,addEntry:entry});
+  if(!opts.noSelect) setSel(o);
+  myObjIds.add(id); lastPlaceMs=performance.now();
+  if(netOn && !opts.editor) send({t:'place',obj:entry});   // show it to everyone else live
   pushHist({
     undo(){ scene.remove(o); const i=layout.adds.indexOf(entry); if(i>=0)layout.adds.splice(i,1);
-      editById.delete(id); if(edSel===o) setSel(null); },
+      editById.delete(id); myObjIds.delete(id); if(edSel===o) setSel(null); },
     redo(){ scene.add(o); if(layout.adds.indexOf(entry)<0)layout.adds.push(entry);
-      editById.set(id,{obj:o,type,added:true,addEntry:entry}); setSel(o); }
+      editById.set(id,{obj:o,type,added:true,addEntry:entry}); myObjIds.add(id); setSel(o); }
   });
+  return o;
+}
+// Add an object a friend placed (or the world snapshot at join): no history, no broadcast.
+function addRemoteObject(a){
+  if(!a||!a.id||!CATALOG[a.type]||editById.has(a.id)) return;
+  const o=CATALOG[a.type](a.text);
+  o.position.set(a.x,a.y||0,a.z); o.rotation.y=a.ry||0;
+  o.userData.editId=a.id; o.userData.editType=a.type; scene.add(o);
+  editById.set(a.id,{obj:o,type:a.type,added:true,addEntry:a}); addColliderFor(o,a.type);
+  if(!layout.adds.some(e=>e.id===a.id)) layout.adds.push(a);   // so a local Save keeps it
 }
 function deleteOps(obj){   // build remove/restore closures for one object (no history)
   const id=obj.userData.editId, e=editById.get(id);
@@ -1209,9 +1754,42 @@ function delSelected(){ if(!selSet.length) return;
   ops.forEach(o=>o.removeIt()); setSel(null);
   pushHist({ undo(){ ops.forEach(o=>o.restoreIt()); }, redo(){ ops.forEach(o=>o.removeIt()); } });
 }
-function dupSelected(){ if(!edSel) return; const e=editById.get(edSel.userData.editId);
-  if(e.type) addObject(e.type, edSel.position.x+2, edSel.position.z+2);
-  else document.getElementById('ed-selinfo').textContent='Can\'t duplicate that — use Add for catalog props.';
+function dupSelected(){ if(!selSet.length) return; copySelection(); if(clipboard&&clipboard.length) pasteClipboard(); }
+
+// ── Copy / paste (catalog props; also pulls props out of selected groups) ──
+let clipboard=null;   // [{type,text,dx,dz,ry}] relative to the copied set's centre
+let clipboardGroup=false;   // copied selection was a group → paste re-groups
+const _cq=new THREE.Quaternion(), _ce=new THREE.Euler();
+function copySelection(){
+  const picked=[];
+  const collect=(obj)=>{ const rec=editById.get(obj.userData.editId)||{};
+    const type=rec.type||obj.userData.editType; if(!type||!CATALOG[type]) return;   // only placeable props
+    const wp=obj.getWorldPosition(new THREE.Vector3());
+    obj.getWorldQuaternion(_cq); _ce.setFromQuaternion(_cq,'YXZ');
+    const text=(rec.addEntry&&rec.addEntry.text!=null)?rec.addEntry.text:(obj.userData.signText||null);
+    picked.push({type, text, x:wp.x, z:wp.z, ry:_ce.y});
+  };
+  clipboardGroup = selSet.some(o=>{ const e=editById.get(o.userData.editId); return e&&e.group; });
+  selSet.forEach(o=>{ const e=editById.get(o.userData.editId); if(!e) return;
+    if(e.group && e.objs){ e.objs.forEach(collect); } else collect(o); });
+  if(!picked.length){ edInfo('Select placed props (or a group of them) to copy.'); return; }
+  const cx=picked.reduce((s,i)=>s+i.x,0)/picked.length, cz=picked.reduce((s,i)=>s+i.z,0)/picked.length;
+  clipboard=picked.map(i=>({type:i.type,text:i.text,dx:i.x-cx,dz:i.z-cz,ry:i.ry}));
+  edInfo('Copied '+clipboard.length+' object'+(clipboard.length>1?'s':''));
+}
+function pasteClipboard(){
+  if(!clipboard||!clipboard.length){ edInfo('Nothing copied yet (Ctrl+C).'); return; }
+  let bx,bz;   // paste anchor: near the current selection, else in front of the camera
+  if(edSel){ bx=edSel.position.x+3; bz=edSel.position.z+3; }
+  else { _ray.setFromCamera(new THREE.Vector2(0,-0.2),camera);
+    const p=_ray.ray.intersectPlane(_gplane,_hit); bx=p?p.x:0; bz=p?p.z:0; }
+  const created=[];
+  clipboard.forEach(c=>{ const o=addObject(c.type, bx+c.dx, bz+c.dz, {editor:true,noSelect:true,text:c.text});
+    if(o){ o.rotation.y=c.ry; recordXform(o); created.push(o); } });
+  if(created.length){ selSet=created; edSel=created[created.length-1]; rebuildHelpers();
+    if(clipboardGroup && created.length>=2) groupSelected();   // keep pasted groups grouped
+    else setSelInfo(edSel); }
+  edInfo('Pasted '+created.length+' object'+(created.length>1?'s':''));
 }
 function centroidOf(list){ const c=new THREE.Vector3();
   list.forEach(o=>c.add(o.getWorldPosition(new THREE.Vector3()))); if(list.length)c.multiplyScalar(1/list.length); return c; }
@@ -1296,22 +1874,29 @@ function importLayout(file){
   r.onerror=()=>{ document.getElementById('ed-selinfo').textContent='Import failed: could not read file'; };
   r.readAsText(file);
 }
-// Save straight to the project files via the node server's /save-layout endpoint.
+// Save the world permanently — only when running locally (writes lobby_layout.js
+// via your local node server). Online, editing stays a temporary sandbox.
 function saveLayout(){
   syncGroups();
   const btn=document.getElementById('ed-save'); const old=btn.textContent;
+  if(!SAVE_URL){
+    btn.textContent='🌐 Sandbox only';
+    edInfo('Online = temporary sandbox. Run the project locally (npm start) to save a permanent world — or use Download backup.');
+    setTimeout(()=>{ btn.textContent=old; },2800);
+    return;
+  }
   btn.textContent='Saving…'; btn.disabled=true;
-  const httpURL=WS_URL.replace(/^ws/,'http');
-  fetch(httpURL+'/save-layout',{ method:'POST', headers:{'Content-Type':'application/json'},
+  fetch(SAVE_URL+'/save-layout',{ method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({level:'lobby',global:'LOBBY_LAYOUT',layout}) })
     .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(j=>{ btn.textContent='✅ Saved to '+j.file; })
     .catch(err=>{ btn.textContent='❌ Save failed';
-      document.getElementById('ed-selinfo').textContent='Save failed ('+err.message+') — is the server running? Use Download backup instead.'; })
-    .finally(()=>{ btn.disabled=false; setTimeout(()=>{ btn.textContent=old; },2500); });
+      edInfo('Save failed ('+err.message+') — start the local server: cd src/server && npm start. Or use Download backup.'); })
+    .finally(()=>{ btn.disabled=false; setTimeout(()=>{ btn.textContent=old; },2800); });
 }
 function applyLayoutData(L){
-  if(!L) return; layout={moves:L.moves||{},deletes:L.deletes||[],adds:L.adds||[],groups:L.groups||[]};
+  if(!L) return; layout={moves:L.moves||{},deletes:L.deletes||[],adds:L.adds||[],groups:L.groups||[],paint:L.paint||{}};
+  loadPaint(layout.paint);
   for(const id in layout.moves){ const e=editById.get(id); if(e){ const t=layout.moves[id];
     e.obj.position.set(t.x,t.y||0,t.z); e.obj.rotation.y=t.ry||0; } }
   layout.deletes.forEach(id=>{ const e=editById.get(id); if(e){ removeColliders(collidersUnder(e.obj)); scene.remove(e.obj); editById.delete(id); } });
@@ -1351,8 +1936,43 @@ function setNdc(e){ const r=renderer.domElement.getBoundingClientRect();
 function groundPoint(e){ setNdc(e); _ray.setFromCamera(_ndc,camera);
   return _ray.ray.intersectPlane(_gplane,_hit)? _hit.clone() : null; }
 
+// ─── GROUND PAINT ─────────────────────────────────────────────────────────────
+const PAINTS=[
+  {id:'grass',col:0x6ab04c}, {id:'concrete',col:0x9e9e9e}, {id:'asphalt',col:0x3a3d42},
+  {id:'parking',col:0x3a3d42,line:true}, {id:'dirt',col:0x8d6e4f}, {id:'sand',col:0xe6c98f},
+  {id:'water',col:0x4f86c6}, {id:'brick',col:0xb05a3a}, {id:'path',col:0xd2c2a0},
+];
+const PAINT_BY=Object.fromEntries(PAINTS.map(p=>[p.id,p]));
+const TILE=3;
+let paintType='grass', paintStroke=null;
+const paintTiles=new Map();   // "ix,iz" -> tile group
+function tileMesh(type){
+  const p=PAINT_BY[type]; const g=new THREE.Group();
+  const base=MM(new THREE.PlaneGeometry(TILE,TILE),p?p.col:0x6ab04c,false);
+  base.rotation.x=-Math.PI/2; g.add(base);
+  if(p&&p.line){ [-TILE/2+.16, TILE/2-.16].forEach(x=>{ const l=MM(new THREE.PlaneGeometry(.16,TILE-.3),0xffffff,false);
+    l.rotation.x=-Math.PI/2; l.position.set(x,.01,0); g.add(l); }); }
+  g.traverse(o=>{ o.userData.noEdit=true; });
+  return g;
+}
+function setPaint(key,type){
+  const old=paintTiles.get(key); if(old){ scene.remove(old); paintTiles.delete(key); }
+  if(type&&type!=='erase'){ const [ix,iz]=key.split(',').map(Number);
+    const g=tileMesh(type); g.position.set(ix*TILE,.05,iz*TILE); scene.add(g); paintTiles.set(key,g); layout.paint[key]=type; }
+  else delete layout.paint[key];
+}
+function loadPaint(P){ for(const k in (P||{})) setPaint(k,P[k]); }
+function paintAt(x,z){ const key=Math.round(x/TILE)+','+Math.round(z/TILE);
+  if(paintStroke && !(key in paintStroke)) paintStroke[key]=layout.paint[key]||'erase';
+  setPaint(key,paintType); }
+
 renderer.domElement.addEventListener('pointerdown',e=>{
   if(!editMode||e.button!==0) return;
+  if(editTool==='paint'){ const gp=groundPoint(e); if(gp){ paintStroke={}; paintAt(gp.x,gp.z); }
+    e.preventDefault(); e.stopPropagation(); return; }
+  if(placeType){ const gp=groundPoint(e); if(gp){ const o=addObject(placeType, gsnap(gp.x), gsnap(gp.z), {editor:true});
+      if(o){ o.rotation.y=ghostRot; recordXform(o); } }
+    e.preventDefault(); e.stopPropagation(); return; }   // stays in place mode for repeated drops
   setNdc(e); _ray.setFromCamera(_ndc,camera);
   const hits=_ray.intersectObjects(editList(),true);
   const root=hits.length?findRoot(hits[0].object):null;
@@ -1370,16 +1990,25 @@ renderer.domElement.addEventListener('pointerdown',e=>{
     e.preventDefault(); e.stopPropagation();
   } else if(!e.shiftKey) setSel(null);
 });
+renderer.domElement.addEventListener('wheel',e=>{
+  if(editMode&&placeType&&ghost){ e.preventDefault();
+    ghostRot += (e.deltaY>0?1:-1)*Math.PI/12; ghost.rotation.y=ghostRot; }
+},{passive:false});
 renderer.domElement.addEventListener('pointermove',e=>{
+  if(editMode&&placeType&&ghost){ const gp=groundPoint(e); if(gp) ghost.position.set(gsnap(gp.x),0,gsnap(gp.z)); return; }
+  if(editMode&&editTool==='paint'&&paintStroke){ const gp=groundPoint(e); if(gp) paintAt(gp.x,gp.z); return; }
   if(!editMode||!dragging) return;
   if(editTool==='move'&&dragOffsets){ const gp=groundPoint(e); if(gp){
-      dragOffsets.forEach(d=>{ d.o.position.x=gp.x+d.dx; d.o.position.z=gp.z+d.dz; recordXform(d.o); }); } }
+      dragOffsets.forEach(d=>{ d.o.position.x=gsnap(gp.x+d.dx); d.o.position.z=gsnap(gp.z+d.dz); recordXform(d.o); }); } }
   else if(editTool==='rotate'&&dragRotStart){ const ang=(e.clientX-dragStartX)*0.01;
       const cx=rotCentroid.x, cz=rotCentroid.z, ca=Math.cos(ang), sa=Math.sin(ang);
       dragRotStart.forEach(d=>{ const dx=d.px-cx, dz=d.pz-cz;
         d.o.position.x=cx+dx*ca-dz*sa; d.o.position.z=cz+dx*sa+dz*ca; d.o.rotation.y=d.ry+ang; recordXform(d.o); }); }
 });
 addEventListener('pointerup',()=>{
+  if(paintStroke){ const before=paintStroke; paintStroke=null; const keys=Object.keys(before);
+    if(keys.length){ const after={}; keys.forEach(k=>after[k]=layout.paint[k]||'erase');
+      pushHist({ undo(){ keys.forEach(k=>setPaint(k,before[k])); }, redo(){ keys.forEach(k=>setPaint(k,after[k])); } }); } }
   if(dragging&&dragBefore){ const beforeMap={},afterMap={}; let changed=false;
     dragBefore.forEach(b=>{ const rec=editById.get(b.id); if(!rec)return; const a=snap(rec.obj);
       beforeMap[b.id]=b.t; afterMap[b.id]=a;
@@ -1389,9 +2018,11 @@ addEventListener('pointerup',()=>{
   dragging=false; dragBefore=null; dragOffsets=null; dragRotStart=null;
 });
 
-function setTool(t){ editTool=t;
+function setTool(t){ exitPlace(); editTool=t;
   document.getElementById('tool-move').classList.toggle('active',t==='move');
-  document.getElementById('tool-rotate').classList.toggle('active',t==='rotate'); }
+  document.getElementById('tool-rotate').classList.toggle('active',t==='rotate');
+  document.getElementById('tool-paint').classList.toggle('active',t==='paint');
+  document.getElementById('ed-paintgrp').style.display=t==='paint'?'block':'none'; }
 function toggleEdit(){ editMode=!editMode;
   document.getElementById('editor').classList.toggle('show',editMode);
   document.getElementById('edit-toggle').classList.toggle('on',editMode);
@@ -1401,10 +2032,24 @@ function toggleEdit(){ editMode=!editMode;
 // wire UI
 (function wireEditor(){
   const sel=document.getElementById('ed-cat');
-  CAT_TYPES.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
+  const ph=document.createElement('option'); ph.value=''; ph.textContent='— pick to place —'; sel.appendChild(ph);
+  CAT_TYPES.slice().sort().forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
+  sel.value='';
   document.getElementById('edit-toggle').addEventListener('click',toggleEdit);
   document.getElementById('tool-move').addEventListener('click',()=>setTool('move'));
   document.getElementById('tool-rotate').addEventListener('click',()=>setTool('rotate'));
+  document.getElementById('tool-paint').addEventListener('click',()=>setTool('paint'));
+  document.getElementById('ed-grid').addEventListener('click',function(){ gridOn=!gridOn; this.classList.toggle('active',gridOn); });
+  (function buildPalette(){ const pal=document.getElementById('ed-palette');
+    const mk=(id,col)=>{ const b=document.createElement('button'); b.textContent=id; b.title=id;
+      b.style.cssText='width:48px;height:28px;font-size:10px;border:2px solid transparent;border-radius:5px;'+
+        'color:#fff;text-shadow:0 1px 1px #000;cursor:pointer;background:#'+col.toString(16).padStart(6,'0');
+      b.addEventListener('click',()=>{ paintType=id; pal.querySelectorAll('button').forEach(x=>x.style.borderColor='transparent'); b.style.borderColor='#fff'; });
+      pal.appendChild(b); return b; };
+    PAINTS.forEach(p=>mk(p.id,p.col));
+    mk('erase',0x222222);
+    pal.firstChild.style.borderColor='#fff';   // grass selected by default
+  })();
   const rotBy=(ang)=>{ if(!selSet.length)return;
     const c=centroidOf(selSet), ca=Math.cos(ang), sa=Math.sin(ang);
     const beforeMap={},afterMap={};
@@ -1425,24 +2070,24 @@ function toggleEdit(){ editMode=!editMode;
     if(edSel&&edSel.userData.setText){ const v=document.getElementById('ed-text').value;
       edSel.userData.setText(v); const e=editById.get(edSel.userData.editId);
       if(e&&e.addEntry) e.addEntry.text=v; refreshHelpers(); } });
-  document.getElementById('ed-add').addEventListener('click',()=>{ const t=sel.value;
-    // drop in front of camera on the ground
-    _ray.setFromCamera(new THREE.Vector2(0,-0.2),camera);
-    const p=_ray.ray.intersectPlane(_gplane,_hit); addObject(t, p?p.x:0, p?p.z:0); });
+  sel.addEventListener('change',()=>{ sel.value ? enterPlace(sel.value) : exitPlace(); });
   document.getElementById('ed-save').addEventListener('click',saveLayout);
   document.getElementById('ed-export').addEventListener('click',exportLayout);
   document.getElementById('ed-import').addEventListener('click',()=>document.getElementById('ed-import-file').click());
   document.getElementById('ed-import-file').addEventListener('change',e=>{ if(e.target.files[0]) importLayout(e.target.files[0]); e.target.value=''; });
   addEventListener('keydown',e=>{
     if(e.key==='F2'){ toggleEdit(); }
-    if(!editMode) return;
+    if(e.code==='Escape'&&placeType){ exitPlace(); return; }
     if(e.target&&e.target.tagName==='INPUT') return;
-    // undo / redo (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z)
+    // undo / redo work even after leaving edit mode (history persists until refresh)
     if((e.ctrlKey||e.metaKey)&&(e.code==='KeyZ'||e.code==='KeyY')){
       e.preventDefault();
       if(e.code==='KeyY'||(e.code==='KeyZ'&&e.shiftKey)) doRedo(); else doUndo();
       return;
     }
+    if(!editMode) return;
+    if((e.ctrlKey||e.metaKey)&&e.code==='KeyC'){ e.preventDefault(); copySelection(); return; }
+    if((e.ctrlKey||e.metaKey)&&e.code==='KeyV'){ e.preventDefault(); pasteClipboard(); return; }
     if((e.ctrlKey||e.metaKey)&&e.code==='KeyG'){ e.preventDefault();
       if(e.shiftKey) ungroupSelected(); else groupSelected(); return; }
     if(e.code==='Delete'||e.code==='Backspace'){ delSelected(); e.preventDefault(); }
@@ -1518,6 +2163,8 @@ function tick(){
     if(cl.position.x>40)cl.position.x=-40; if(cl.position.x<-40)cl.position.x=40; });
 
   if(editMode){ updateFreeCam(dt); syncColliders(); } else updateCamera(dt);
+  updateFx(dt);
+  updatePortals();
   updateBubbles(now);
   renderer.render(scene,camera);
 }

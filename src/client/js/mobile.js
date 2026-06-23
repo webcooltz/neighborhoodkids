@@ -16,6 +16,7 @@
     M.joystick=function(){}; M.button=function(){return null;};
     M.tapCanvas=function(){}; M.touchDraw=function(){};
     M.lanes=function(){return null;}; M.key=function(){};
+    M.pinch=function(){};
     return;
   }
 
@@ -120,6 +121,23 @@
     document.body.appendChild(wrap);
     codes.forEach(code=>M.button({label:code.replace('Key',''),code,parent:wrap}));
     return wrap;
+  };
+
+  // Two-finger pinch on the 3D canvas → cb(ratio) per move.
+  // ratio>1 = fingers spreading (zoom in), <1 = pinching together (zoom out).
+  M.pinch=function(cb,opts){
+    opts=opts||{};
+    const el=document.getElementById(opts.target||'c'); if(!el) return;
+    let last=0, active=false;
+    const dist=(t)=>Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+    el.addEventListener('touchstart',e=>{ if(e.touches.length===2){ active=true; last=dist(e.touches); } },{passive:true});
+    el.addEventListener('touchmove',e=>{ if(!active||e.touches.length!==2) return; e.preventDefault();
+      const d=dist(e.touches);
+      if(last>0){ const r=d/last; if(isFinite(r)&&r>0) cb(r); }
+      last=d;
+    },{passive:false});
+    const end=e=>{ if(e.touches.length<2){ active=false; last=0; } };
+    el.addEventListener('touchend',end); el.addEventListener('touchcancel',end);
   };
 
   // Tap on the 3D canvas → fn(clientX,clientY). Ignores drags.

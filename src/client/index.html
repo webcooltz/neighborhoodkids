@@ -336,6 +336,19 @@ header {
     </div>
   </div>
 
+  <!-- Stephanie: driving -->
+  <div class="card playable" style="--accent:#d32f2f" onclick="window.location.href='levels/stephanie.html'">
+    <div class="card-header"></div>
+    <div class="card-body">
+      <div class="lvl-num">Level 09</div>
+      <div class="emoji">🚗</div>
+      <div class="kid-name">STEPHANIE</div>
+      <div class="kid-info">Beetle Ring Rally</div>
+      <div class="card-stars" id="stars-10"></div>
+      <button class="card-btn play">Play</button>
+    </div>
+  </div>
+
   <!-- Hidden bonus: Tyler -->
   <div class="card playable" id="tyler-card" style="--accent:#ffd54f; display:none"
        onclick="window.location.href='tyler.html'">
@@ -372,7 +385,7 @@ header {
 <script src="js/achievements.js"></script>
 <script>
 (function(){
-  [1,2,3,4,5,6,7,8,9].forEach(function(n){
+  [1,2,3,4,5,6,7,8,9,10].forEach(function(n){
     var s=parseInt(localStorage.getItem('tuck_stars_'+n)||'0');
     var el=document.getElementById('stars-'+n);
     if(!el||s<1) return;
@@ -413,7 +426,7 @@ header {
   });
   document.getElementById('stars-reset').addEventListener('click',function(){
     if(!confirm('Reset ALL level stars and progress? This cannot be undone.')) return;
-    [1,2,3,4,5,6,7,8].forEach(function(n){ localStorage.removeItem('tuck_stars_'+n); });
+    [1,2,3,4,5,6,7,8,9,10].forEach(function(n){ localStorage.removeItem('tuck_stars_'+n); });
     localStorage.setItem('tuck_ach_seen','');
     location.reload();
   });

@@ -171,6 +171,7 @@ canvas#c { display:block; width:100vw; height:100vh; }
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script src="../js/mobile.js"></script>
 <script src="../js/achievements.js"></script>
+<script src="../js/hub.js"></script>
 <script>
 'use strict';
 
@@ -953,8 +954,8 @@ function startLevel(){
 document.getElementById('intro-btn').addEventListener('click',startLevel);
 document.getElementById('replay-btn').addEventListener('click',resetLevel);
 document.getElementById('retry-btn').addEventListener('click',resetLevel);
-document.getElementById('next-btn').addEventListener('click',()=>window.location.href='../index.html');
-document.getElementById('fail-menu-btn').addEventListener('click',()=>window.location.href='../index.html');
+document.getElementById('next-btn').addEventListener('click',()=>window.Hub.home('../'));
+document.getElementById('fail-menu-btn').addEventListener('click',()=>window.Hub.home('../'));
 
 // ── GAME LOOP ─────────────────────────────────────────────────────────────
 let prev=performance.now();

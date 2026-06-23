@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Stephanie — Beetle Ring Rally</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#bfe3ff;font-family:'Segoe UI',Arial,sans-serif;color:#fff}
+  #c{display:block;width:100%;height:100%}
+
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:30}
+  #timer{position:fixed;left:50%;top:12px;transform:translateX(-50%);text-align:center;
+    text-shadow:0 2px 6px rgba(0,0,0,.5)}
+  #timer .big{font-size:40px;font-weight:bold;letter-spacing:2px}
+  #timer.warn .big{color:#ff5252}
+  #timer .sm{font-size:13px;letter-spacing:2px;opacity:.85}
+  #rings-info{position:fixed;left:14px;top:12px;text-shadow:0 2px 5px rgba(0,0,0,.5)}
+  #rings-info .big{font-size:24px;font-weight:bold}
+  #rings-info .sm{font-size:12px;color:#fff59d}
+  #speed-info{position:fixed;right:14px;top:12px;text-align:right;text-shadow:0 2px 5px rgba(0,0,0,.5)}
+  #speed-info .big{font-size:24px;font-weight:bold}
+  #speed-info .sm{font-size:12px;opacity:.8}
+
+  #banner{position:fixed;left:50%;top:32%;transform:translate(-50%,-50%);text-align:center;
+    z-index:40;pointer-events:none;opacity:0;transition:opacity .3s}
+  #banner.show{opacity:1}
+  #banner .t{font-size:40px;font-weight:bold;letter-spacing:3px;text-shadow:0 3px 14px rgba(0,0,0,.6)}
+
+  /* direction arrow to next ring */
+  #arrow{position:fixed;left:50%;top:24%;width:64px;height:64px;margin:-32px 0 0 -32px;z-index:35;
+    pointer-events:none;transition:opacity .2s;filter:drop-shadow(0 2px 5px rgba(0,0,0,.5))}
+  #arrow svg{display:block;width:100%;height:100%}
+
+  /* NOS meter */
+  #nos-wrap{position:fixed;right:14px;bottom:46px;width:170px;max-width:44vw;z-index:31;text-align:right;
+    text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  #nos-wrap .lbl{font-size:12px;font-weight:bold;letter-spacing:2px;color:#80d8ff}
+  #nos-bar{height:14px;border-radius:8px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.3);
+    overflow:hidden;margin-top:3px}
+  #nos-fill{height:100%;width:100%;background:linear-gradient(90deg,#0091ea,#80d8ff);transition:width .08s}
+  #nos-wrap.ready #nos-fill{background:linear-gradient(90deg,#00c853,#b9f6ca)}
+  #nos-wrap.active #nos-fill{background:linear-gradient(90deg,#ffab00,#ffea00)}
+
+  #warn{position:fixed;left:50%;bottom:42%;transform:translateX(-50%);z-index:41;
+    font-size:26px;font-weight:bold;letter-spacing:2px;color:#fff176;
+    text-shadow:0 2px 8px rgba(0,0,0,.7);opacity:0;transition:opacity .15s;pointer-events:none}
+  #warn.show{opacity:1}
+
+  #instr{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:30;
+    font-size:13px;color:rgba(255,255,255,.92);text-shadow:0 1px 3px rgba(0,0,0,.6);text-align:center}
+  #menu-link{position:fixed;left:14px;bottom:12px;z-index:31;color:#fff;text-decoration:none;
+    background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.3);padding:6px 14px;border-radius:16px;
+    font-size:13px;cursor:pointer}
+
+  .overlay{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;
+    background:rgba(8,20,34,.78);padding:18px}
+  .overlay.show{display:flex}
+  .panel{background:linear-gradient(160deg,#243a52,#0e1a28);border:1px solid rgba(255,255,255,.16);
+    border-radius:18px;padding:28px 30px;max-width:440px;width:100%;text-align:center;
+    box-shadow:0 14px 50px rgba(0,0,0,.55)}
+  .panel h1{font-size:28px;letter-spacing:1px;margin-bottom:6px}
+  .panel .sub{color:rgba(255,255,255,.72);font-size:15px;margin-bottom:18px;line-height:1.5}
+  .panel .stars{font-size:34px;letter-spacing:4px;color:#ffd54f;margin:8px 0 16px}
+  .btn{padding:12px 28px;border:none;border-radius:24px;font-size:16px;font-weight:bold;
+    letter-spacing:1px;cursor:pointer;margin:6px}
+  .btn.primary{background:#e53935;color:#fff}
+  .btn.ghost{background:rgba(255,255,255,.14);color:#fff}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div id="rings-info"><div class="big" id="ring-count">0 / 6</div><div class="sm" id="ring-sub">RINGS</div></div>
+  <div id="timer"><div class="big" id="time-num">75</div><div class="sm">SECONDS</div></div>
+  <div id="speed-info"><div class="big" id="speed-num">0</div><div class="sm">MPH</div></div>
+</div>
+<div id="arrow"><svg viewBox="0 0 64 64"><path d="M32 4 L52 40 L32 30 L12 40 Z" fill="#ffd54f" stroke="#7a5c00" stroke-width="2"/></svg></div>
+<div id="nos-wrap"><div class="lbl">⚡ NOS</div><div id="nos-bar"><div id="nos-fill"></div></div></div>
+<div id="warn">⚠ STAY ON THE ROAD!</div>
+<div id="banner"><div class="t" id="banner-t"></div></div>
+<div id="instr">↑/W gas &nbsp;·&nbsp; ↓/S brake &nbsp;·&nbsp; ←→/AD steer &nbsp;·&nbsp; <b>Space = NOS</b> &nbsp;·&nbsp; joystick + NOS button on mobile</div>
+<div id="menu-link" onclick="Hub.home('../')">⌂ Menu</div>
+
+<!-- Start -->
+<div id="start" class="overlay show">
+  <div class="panel">
+    <h1>🚗 STEPHANIE'S RING RALLY</h1>
+    <div class="sub">Stephanie's got the keys to a shiny <b>red Beetle</b>.<br>
+      Clear all <b>5 stages</b> — drive through each stage's rings (in order, next one glows <b>gold</b>)
+      before time runs out. <b>Space = NOS</b> boost!</div>
+    <button class="btn primary" id="start-btn">Start Driving</button>
+  </div>
+</div>
+
+<!-- Win -->
+<div id="win" class="overlay">
+  <div class="panel">
+    <h1 style="color:#a5d6a7">RALLY COMPLETE!</h1>
+    <div class="sub" id="win-sub">All rings cleared!</div>
+    <div class="stars" id="win-stars">★★★</div>
+    <button class="btn primary" id="win-replay">Drive Again</button>
+    <button class="btn ghost" onclick="Hub.home('../')">Menu</button>
+  </div>
+</div>
+
+<!-- Fail -->
+<div id="fail" class="overlay">
+  <div class="panel">
+    <h1 style="color:#ff8a80">TIME'S UP!</h1>
+    <div class="sub" id="fail-sub">So close — try a tighter line.</div>
+    <button class="btn primary" id="retry-btn">Try Again</button>
+    <button class="btn ghost" onclick="Hub.home('../')">Menu</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="../js/mobile.js"></script>
+<script src="../js/achievements.js"></script>
+<script src="../js/hub.js"></script>
+<script>
+'use strict';
+
+// ─── SCENE ────────────────────────────────────────────────────────────────────
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0xbfe3ff);
+scene.fog=new THREE.Fog(0xbfe3ff,90,200);
+
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,400);
+camera.position.set(0,8,-14);
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight); });
+
+scene.add(new THREE.AmbientLight(0xffffff,.72));
+const sun=new THREE.DirectionalLight(0xfff4d6,1.05);
+sun.position.set(40,70,30); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
+const sc=sun.shadow.camera; sc.left=-60;sc.right=60;sc.top=60;sc.bottom=-60;sc.near=1;sc.far=260; sun.shadow.bias=-.0009;
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xcfeaff,0x4a5a3a,.55));
+
+function MM(geo,col,shadow){ const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:col}));
+  if(shadow){m.castShadow=true;m.receiveShadow=true;} return m; }
+function at(m,x,y,z){ m.position.set(x||0,y||0,z||0); return m; }
+
+const BOUND=85;   // big town so there's room to drive
+const ROAD_LINES=[-60,-30,0,30,60], ROAD_HALF=5.5;   // road centres + half-width
+function onRoad(x,z){ let dx=Infinity,dz=Infinity;
+  for(const p of ROAD_LINES){ dx=Math.min(dx,Math.abs(x-p)); dz=Math.min(dz,Math.abs(z-p)); }
+  return dx<ROAD_HALF || dz<ROAD_HALF; }
+
+// ─── TOWN ─────────────────────────────────────────────────────────────────────
+(function buildTown(){
+  const grass=MM(new THREE.PlaneGeometry(BOUND*2,BOUND*2),0x7cb342);
+  grass.rotation.x=-Math.PI/2; grass.receiveShadow=true; scene.add(grass);
+
+  // road grid (every 30 units), dark asphalt with dashed centre lines
+  const ROADS=[-60,-30,0,30,60];
+  ROADS.forEach(p=>{
+    const rh=MM(new THREE.PlaneGeometry(BOUND*2,11),0x3a3d44); rh.rotation.x=-Math.PI/2; rh.position.set(0,.02,p); scene.add(rh);
+    const rv=MM(new THREE.PlaneGeometry(11,BOUND*2),0x3a3d44); rv.rotation.x=-Math.PI/2; rv.position.set(p,.02,0); scene.add(rv);
+    for(let t=-BOUND+4;t<BOUND;t+=8){
+      const dh=MM(new THREE.PlaneGeometry(3,.5),0xffe082); dh.rotation.x=-Math.PI/2; dh.position.set(t,.03,p); scene.add(dh);
+      const dv=MM(new THREE.PlaneGeometry(.5,3),0xffe082); dv.rotation.x=-Math.PI/2; dv.position.set(p,.03,t); scene.add(dv);
+    }
+  });
+
+  // houses scattered on the grass blocks (kept off the roads)
+  const wallCols=[0xef9a9a,0xfff59d,0xa5d6a7,0x90caf9,0xce93d8,0xffcc80,0xb0bec5];
+  const roofCols=[0x6d4c41,0x455a64,0x5d4037,0x37474f];
+  let ci=0;
+  for(let bx=-60;bx<=60;bx+=30){
+    for(let bz=-60;bz<=60;bz+=30){
+      // 0–2 houses per block, offset into the grass between roads
+      const n=(Math.abs(bx)+Math.abs(bz))%3;
+      for(let k=0;k<=n;k++){
+        const ox=bx+15+((k*11)%9)-4, oz=bz+15+((k*7)%9)-4;
+        if(Math.abs(ox)>BOUND-6||Math.abs(oz)>BOUND-6) continue;
+        const w=4+((ci*3)%3), h=3+((ci*2)%3);
+        const g=new THREE.Group(); g.position.set(ox,0,oz); scene.add(g);
+        const body=MM(new THREE.BoxGeometry(w,h,w),wallCols[ci%wallCols.length],true); body.position.y=h/2; g.add(body);
+        const roof=MM(new THREE.ConeGeometry(w*.82,1.8,4),roofCols[ci%roofCols.length],true);
+        roof.position.y=h+.9; roof.rotation.y=Math.PI/4; g.add(roof);
+        g.add(at(MM(new THREE.BoxGeometry(1,1.6,.1),0x4e342e,false),0,.8,w/2+.01));   // door
+        ci++;
+      }
+      // a tree on each block corner
+      const tx=bx+6, tz=bz+24;
+      if(Math.abs(tx)<BOUND-3&&Math.abs(tz)<BOUND-3){
+        const tr=new THREE.Group(); tr.position.set(tx,0,tz); scene.add(tr);
+        tr.add(at(MM(new THREE.CylinderGeometry(.25,.32,2,6),0x6d4c2a,true),0,1,0));
+        tr.add(at(MM(new THREE.SphereGeometry(1.5,7,6),0x43a047,true),0,2.8,0));
+      }
+    }
+  }
+
+  // outer fence-ish border blocks so the world feels bounded
+  for(let p=-BOUND;p<=BOUND;p+=10){
+    [-BOUND,BOUND].forEach(e=>{
+      scene.add(at(MM(new THREE.BoxGeometry(1,2,1),0x8d6e63,false),p,1,e));
+      scene.add(at(MM(new THREE.BoxGeometry(1,2,1),0x8d6e63,false),e,1,p));
+    });
+  }
+})();
+
+// ─── RED VW BEETLE (+ Stephanie at the wheel) ─────────────────────────────────
+function buildBeetle(){
+  const g=new THREE.Group();
+  const RED=0xd32f2f, DARK=0x212121, GLASS=0x263238, CHROME=0xcfd8dc;
+  // rounded body: lower hull + domed cabin (classic bug silhouette)
+  const hull=MM(new THREE.BoxGeometry(2.2,.9,4.2),RED,true); hull.position.y=.7; g.add(hull);
+  const dome=MM(new THREE.SphereGeometry(1.25,12,10),RED,true);
+  dome.scale.set(1,.62,1.35); dome.position.set(0,1.25,-.1); g.add(dome);
+  // front + rear fenders (rounded humps)
+  [[1.05,1.4],[-1.05,1.4],[1.05,-1.4],[-1.05,-1.4]].forEach(([x,z])=>{
+    const f=MM(new THREE.SphereGeometry(.62,8,7),RED,true); f.scale.set(1,.7,1.1); f.position.set(x,.62,z); g.add(f);
+  });
+  // windshield + rear glass + side windows (dark dome band)
+  const band=MM(new THREE.SphereGeometry(1.12,12,10),GLASS,false);
+  band.scale.set(1.01,.5,1.18); band.position.set(0,1.42,-.1); g.add(band);
+  // bumpers
+  g.add(at(MM(new THREE.BoxGeometry(2.0,.22,.4),CHROME,true),0,.5,2.15));
+  g.add(at(MM(new THREE.BoxGeometry(2.0,.22,.4),CHROME,true),0,.5,-2.15));
+  // round headlights + tail lights
+  g.add(at(MM(new THREE.SphereGeometry(.2,8,8),0xfff9c4,false),.7,.85,2.05));
+  g.add(at(MM(new THREE.SphereGeometry(.2,8,8),0xfff9c4,false),-.7,.85,2.05));
+  g.add(at(MM(new THREE.SphereGeometry(.16,8,8),0xb71c1c,false),.7,.85,-2.05));
+  g.add(at(MM(new THREE.SphereGeometry(.16,8,8),0xb71c1c,false),-.7,.85,-2.05));
+  // wheels (front pair steer)
+  const wheels=[], steer=[];
+  [[1.12,1.35,true],[-1.12,1.35,true],[1.12,-1.35,false],[-1.12,-1.35,false]].forEach(([x,z,front])=>{
+    const piv=new THREE.Group(); piv.position.set(x,.45,z); g.add(piv);
+    const spin=new THREE.Group(); piv.add(spin);
+    const w=MM(new THREE.CylinderGeometry(.45,.45,.3,12),DARK,true); w.rotation.z=Math.PI/2; spin.add(w);
+    w.add(at(MM(new THREE.BoxGeometry(.05,.5,.1),CHROME,false),0,0,0));   // hub spoke
+    wheels.push(spin); if(front) steer.push(piv);
+  });
+  // Stephanie: adult woman, brown medium hair in a ponytail, head + shoulders above the seat
+  const ste=new THREE.Group(); ste.position.set(.45,1.15,-.1); g.add(ste);
+  const SKIN=0xf0c39a, HAIR=0x6b4423, TOP=0x00897b;
+  ste.add(at(MM(new THREE.BoxGeometry(.7,.5,.5),TOP,true),0,-.1,0));        // shoulders/torso
+  ste.add(at(MM(new THREE.BoxGeometry(.42,.46,.42),SKIN,true),0,.42,0));    // head
+  ste.add(at(MM(new THREE.BoxGeometry(.46,.2,.46),HAIR,true),0,.62,-.02));  // hair top
+  ste.add(at(MM(new THREE.BoxGeometry(.46,.34,.16),HAIR,true),0,.4,-.22));  // hair back (medium length)
+  const pony=MM(new THREE.CylinderGeometry(.08,.05,.5,7),HAIR,true);        // ponytail
+  pony.position.set(0,.28,-.34); pony.rotation.x=.5; ste.add(pony);
+  ste.add(at(MM(new THREE.BoxGeometry(.07,.06,.03),0x222,false),-.1,.42,.21)); // eyes
+  ste.add(at(MM(new THREE.BoxGeometry(.07,.06,.03),0x222,false),.1,.42,.21));
+
+  // NOS exhaust flame (hidden unless boosting)
+  const flame=MM(new THREE.ConeGeometry(.34,1.5,8),0xff9100,false);
+  flame.rotation.x=Math.PI/2; flame.position.set(0,.55,-2.5); flame.visible=false; g.add(flame);
+  g.userData.flame=flame;
+  g.userData.wheels=wheels; g.userData.steer=steer;
+  return g;
+}
+const car=buildBeetle(); scene.add(car);
+const cs={ pos:new THREE.Vector3(0,0,18), heading:Math.PI, speed:0 };  // start on south road facing the course
+
+// ─── RINGS (the course) ───────────────────────────────────────────────────────
+const RING_R=2.6, RING_COL=0xffd54f, RING_DIM=0x4fc3f7, RING_DONE=0x66bb6a;
+// Clockwise loop on the outer road grid: drive straight off the start, then 4 right turns.
+// start (0,18) faces north → (0,-15) → (0,-60) → turn E → (60,-60) → turn S → (60,60)
+// → turn W → (-60,60) → turn N → (-60,-60). Spread wide, no backtracking.
+// Each stage: an ordered ring loop on the road grid (gentle turns, no big backtracks) + a time budget.
+const STAGES=[
+  { name:'Warm-Up Loop',     time:90, rings:[{x:0,z:-15},{x:0,z:-60},{x:60,z:-60},{x:60,z:60},{x:-60,z:60},{x:-60,z:-60}] },
+  { name:'Inner Circuit',    time:68, rings:[{x:0,z:0},{x:0,z:-30},{x:30,z:-30},{x:30,z:30},{x:-30,z:30},{x:-30,z:-30}] },
+  { name:'Cross-Town Sweep', time:72, rings:[{x:0,z:-30},{x:60,z:-30},{x:60,z:0},{x:-60,z:0},{x:-60,z:30},{x:60,z:30}] },
+  { name:'The Spiral',       time:90, rings:[{x:0,z:-60},{x:60,z:-60},{x:60,z:60},{x:-60,z:60},{x:-60,z:-30},{x:30,z:-30},{x:30,z:30},{x:-30,z:30}] },
+  { name:'Grand Prix',       time:84, rings:[{x:0,z:-30},{x:0,z:-60},{x:60,z:-60},{x:60,z:0},{x:0,z:0},{x:0,z:60},{x:-60,z:60},{x:-60,z:-60}] },
+];
+let rings=[];
+function buildRing(p){
+  const grp=new THREE.Group(); grp.position.set(p.x,RING_R+.3,p.z);
+  const torus=new THREE.Mesh(new THREE.TorusGeometry(RING_R,.34,10,24),
+    new THREE.MeshLambertMaterial({color:RING_DIM,emissive:0x113355}));
+  grp.add(torus);
+  grp.add(at(MM(new THREE.CylinderGeometry(.12,.12,RING_R+.3,8),0xb0bec5,false),RING_R,-(RING_R/2+.15),0));
+  grp.add(at(MM(new THREE.CylinderGeometry(.12,.12,RING_R+.3,8),0xb0bec5,false),-RING_R,-(RING_R/2+.15),0));
+  scene.add(grp);
+  return {grp,torus,pos:new THREE.Vector3(p.x,0,p.z),done:false};
+}
+function setRings(positions){ rings.forEach(r=>scene.remove(r.grp)); rings=positions.map(buildRing); }
+function paintRings(){
+  rings.forEach((r,i)=>{
+    const c=r.done?RING_DONE:(i===target?RING_COL:RING_DIM);
+    r.torus.material.color.setHex(c);
+    r.torus.material.emissive.setHex(r.done?0x113311:(i===target?0x554400:0x113355));
+  });
+}
+
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+let target=0, collected=0, timeLeft=90, running=false, ended=false, stageIndex=0;
+
+// NOS: full = 2s of boost, recharges fully over 6s
+let nosCharge=1, nosActive=false, nosKey=false;
+const NOS_DRAIN=1/2, NOS_RECHARGE=1/6, NOS_SPEED=1.7, NOS_ACCEL=2.0;
+
+// ─── AUDIO ────────────────────────────────────────────────────────────────────
+let _ac=null;
+function ac(){ if(!_ac){ try{_ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} }
+  if(_ac&&_ac.state==='suspended')_ac.resume(); return _ac; }
+function blip(freq,dur,type){ const a=ac(); if(!a)return; const o=a.createOscillator(),g=a.createGain();
+  o.type=type||'square'; o.frequency.value=freq; o.connect(g); g.connect(a.destination);
+  g.gain.setValueAtTime(.22,a.currentTime); g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+dur);
+  o.start(); o.stop(a.currentTime+dur+.02); }
+function chord(notes,dur){ notes.forEach(f=>blip(f,dur,'triangle')); }
+
+// ─── INPUT ────────────────────────────────────────────────────────────────────
+const keys={gas:false,brake:false,left:false,right:false};
+addEventListener('keydown',e=>{
+  switch(e.code){
+    case'KeyW':case'ArrowUp':keys.gas=true;break;
+    case'KeyS':case'ArrowDown':keys.brake=true;break;
+    case'KeyA':case'ArrowLeft':keys.left=true;break;
+    case'KeyD':case'ArrowRight':keys.right=true;break;
+    case'Space':e.preventDefault();nosKey=true;break;
+  }
+});
+addEventListener('keyup',e=>{
+  switch(e.code){
+    case'KeyW':case'ArrowUp':keys.gas=false;break;
+    case'KeyS':case'ArrowDown':keys.brake=false;break;
+    case'KeyA':case'ArrowLeft':keys.left=false;break;
+    case'KeyD':case'ArrowRight':keys.right=false;break;
+    case'Space':nosKey=false;break;
+  }
+});
+if(window.Mobile&&Mobile.ready){
+  Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.button({label:'NOS',code:'Space'});
+}
+
+// ─── DRIVING ──────────────────────────────────────────────────────────────────
+const MAXSPEED=26, ACCEL=18, BRAKE=34, REV_MAX=-9, FRICTION=9, TURN=2.1, GRASS_MULT=0.7;
+let onRoadNow=true;
+function updateCar(dt){
+  onRoadNow=onRoad(cs.pos.x,cs.pos.z);
+  const accelNow=ACCEL*(nosActive?NOS_ACCEL:1);
+  if(keys.gas) cs.speed+=accelNow*dt;
+  else if(keys.brake) cs.speed-=BRAKE*dt;
+  else { // coast → friction toward 0
+    if(cs.speed>0) cs.speed=Math.max(0,cs.speed-FRICTION*dt);
+    else if(cs.speed<0) cs.speed=Math.min(0,cs.speed+FRICTION*dt);
+  }
+  // top speed: boosted by NOS, cut 30% on the grass
+  const cap=MAXSPEED*(nosActive?NOS_SPEED:1)*(onRoadNow?1:GRASS_MULT);
+  cs.speed=Math.max(REV_MAX*(onRoadNow?1:GRASS_MULT),Math.min(cap,cs.speed));
+  // steering scales with speed; reverse flips it
+  const steerIn=(keys.left?1:0)-(keys.right?1:0);
+  const grip=Math.min(1,Math.abs(cs.speed)/6);
+  cs.heading+=steerIn*TURN*dt*grip*(cs.speed<0?-1:1);
+  cs.pos.x+=Math.sin(cs.heading)*cs.speed*dt;
+  cs.pos.z+=Math.cos(cs.heading)*cs.speed*dt;
+  const lim=BOUND-3;
+  cs.pos.x=Math.max(-lim,Math.min(lim,cs.pos.x));
+  cs.pos.z=Math.max(-lim,Math.min(lim,cs.pos.z));
+  car.position.set(cs.pos.x,0,cs.pos.z); car.rotation.y=cs.heading;
+  // visuals: spin wheels, steer fronts, NOS flame
+  const spin=cs.speed*dt/0.45;
+  car.userData.wheels.forEach(w=>w.rotation.x+=spin);
+  car.userData.steer.forEach(p=>p.rotation.y=steerIn*0.4);
+  const fl=car.userData.flame;
+  if(fl){ fl.visible=nosActive&&cs.speed>1; if(fl.visible) fl.scale.setScalar(.7+Math.random()*.6); }
+}
+function updateNos(dt){
+  if(nosKey && nosCharge>0){ nosActive=true; nosCharge=Math.max(0,nosCharge-NOS_DRAIN*dt); if(nosCharge<=0) nosActive=false; }
+  else { nosActive=false; nosCharge=Math.min(1,nosCharge+NOS_RECHARGE*dt); }
+  document.getElementById('nos-fill').style.width=(nosCharge*100)+'%';
+  const wrap=document.getElementById('nos-wrap');
+  wrap.classList.toggle('active',nosActive);
+  wrap.classList.toggle('ready',!nosActive && nosCharge>=1);
+}
+function updateArrow(){
+  const a=document.getElementById('arrow');
+  if(target>=rings.length){ a.style.opacity=0; return; }
+  a.style.opacity=1;
+  const r=rings[target];
+  let rel=Math.atan2(r.pos.x-cs.pos.x, r.pos.z-cs.pos.z)-cs.heading;
+  while(rel>Math.PI)rel-=2*Math.PI; while(rel<-Math.PI)rel+=2*Math.PI;
+  a.style.transform='rotate('+(rel*180/Math.PI)+'deg)';
+}
+
+// ─── RINGS / CAMERA / HUD ─────────────────────────────────────────────────────
+function checkRings(){
+  if(target>=rings.length) return;
+  const r=rings[target];
+  const dx=cs.pos.x-r.pos.x, dz=cs.pos.z-r.pos.z;
+  if(Math.hypot(dx,dz)<RING_R){
+    r.done=true; collected++; target++; paintRings();
+    blip(660+collected*40,.12); blip(880+collected*40,.12,'triangle');
+    if(target>=rings.length) stageComplete();
+    else flash('RING '+collected+'!');
+  }
+}
+function stageComplete(){
+  if(stageIndex<STAGES.length-1){
+    running=false;
+    blip(700,.16); setTimeout(()=>blip(990,.2,'triangle'),120);
+    flash('STAGE '+(stageIndex+1)+' CLEARED!');
+    const next=stageIndex+1;
+    setTimeout(()=>{ if(!ended) loadStage(next); }, 1300);
+  } else { win(); }
+}
+const camTmp=new THREE.Vector3();
+function updateCamera(dt){
+  const back=14, up=7;
+  camTmp.set(cs.pos.x-Math.sin(cs.heading)*back, up, cs.pos.z-Math.cos(cs.heading)*back);
+  const a=1-Math.pow(.0015,dt);
+  camera.position.lerp(camTmp,a);
+  camera.lookAt(cs.pos.x+Math.sin(cs.heading)*4, 1.4, cs.pos.z+Math.cos(cs.heading)*4);
+}
+function updateHud(){
+  document.getElementById('ring-count').textContent=collected+' / '+rings.length;
+  document.getElementById('ring-sub').textContent='RINGS · STAGE '+(stageIndex+1)+'/'+STAGES.length;
+  const t=Math.max(0,Math.ceil(timeLeft));
+  document.getElementById('time-num').textContent=t;
+  document.getElementById('timer').classList.toggle('warn',t<=10);
+  document.getElementById('speed-num').textContent=Math.round(Math.abs(cs.speed)*2.4);
+}
+let flashT=0;
+function flash(txt){ const b=document.getElementById('banner'); document.getElementById('banner-t').textContent=txt;
+  b.classList.add('show'); flashT=1.0; }
+
+// ─── WIN / FAIL ───────────────────────────────────────────────────────────────
+function saveStars(s){ const k='tuck_stars_10';
+  if(s>parseInt(localStorage.getItem(k)||'0')) localStorage.setItem(k,String(s));
+  if(window.Ach) Ach.check(); }
+function win(){
+  if(ended) return; ended=true; running=false;
+  const stars=3;   // cleared all 5 stages
+  saveStars(stars);
+  chord([523,659,784],.5); setTimeout(()=>chord([659,784,1047],.6),180);
+  document.getElementById('win-sub').textContent='All '+STAGES.length+' stages cleared — Stephanie wins the rally!';
+  document.getElementById('win-stars').textContent='★'.repeat(stars)+'☆'.repeat(3-stars);
+  document.getElementById('win').classList.add('show');
+}
+function fail(){
+  if(ended) return; ended=true; running=false;
+  blip(180,.5,'sawtooth');
+  document.getElementById('fail-sub').textContent='Got '+collected+' of '+rings.length+' rings. Try a tighter line!';
+  document.getElementById('fail').classList.add('show');
+}
+
+// ─── START / RESET ────────────────────────────────────────────────────────────
+function loadStage(i){
+  stageIndex=i; const st=STAGES[i];
+  setRings(st.rings);
+  target=0; collected=0; timeLeft=st.time; ended=false;
+  cs.pos.set(0,0,18); cs.heading=Math.PI; cs.speed=0;
+  car.position.set(0,0,18); car.rotation.y=Math.PI;
+  nosCharge=1; nosActive=false; nosKey=false;
+  document.getElementById('warn').classList.remove('show');
+  paintRings(); updateHud();
+  flash('STAGE '+(i+1)+': '+st.name);
+  running=true;
+}
+function startGame(){
+  // drop focus off the Start/Retry button so Space fires NOS, not a re-click
+  if(document.activeElement&&document.activeElement.blur) document.activeElement.blur();
+  document.getElementById('win').classList.remove('show');
+  document.getElementById('fail').classList.remove('show');
+  document.getElementById('start').classList.remove('show');
+  ac(); loadStage(0);
+}
+document.getElementById('start-btn').addEventListener('click',startGame);
+document.getElementById('retry-btn').addEventListener('click',startGame);
+document.getElementById('win-replay').addEventListener('click',startGame);
+paintRings(); updateHud();
+
+// ─── LOOP ─────────────────────────────────────────────────────────────────────
+let prev=performance.now();
+function tick(){
+  requestAnimationFrame(tick);
+  const now=performance.now(), dt=Math.min((now-prev)/1000,.05); prev=now;
+  if(running){
+    updateNos(dt);
+    updateCar(dt);
+    checkRings();
+    updateArrow();
+    document.getElementById('warn').classList.toggle('show', !onRoadNow && Math.abs(cs.speed)>0.5);
+    timeLeft-=dt; if(timeLeft<=0){ timeLeft=0; fail(); }
+    updateHud();
+  }
+  // gentle ring bob + spin
+  const tm=now*.001;
+  rings.forEach((r,i)=>{ r.torus.rotation.z=tm*(i===target?1.4:.4); r.grp.position.y=RING_R+.3+Math.sin(tm+i)*.12; });
+  if(flashT>0){ flashT-=dt; if(flashT<=0) document.getElementById('banner').classList.remove('show'); }
+  updateCamera(dt);
+  renderer.render(scene,camera);
+}
+tick();
+</script>
+</body>
+</html>
