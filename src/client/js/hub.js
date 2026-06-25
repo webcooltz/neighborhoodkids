@@ -25,7 +25,18 @@
     },
 
     // Lobby asks: did we just come back from a minigame?
-    isReturning(){ if(sget('tuck_return')==='1'){ sdel('tuck_return'); return true; } return false; }
+    isReturning(){ if(sget('tuck_return')==='1'){ sdel('tuck_return'); return true; } return false; },
+
+    // ── shared chat history (persists across lobby ↔ minigames) ──
+    chatLog(){ try{ return JSON.parse(get('tuck_chat')||'[]'); }catch(e){ return []; } },
+    chatPush(name,text,sys){
+      const log=Hub.chatLog();
+      log.push({ n:name||null, t:String(text||''), s:!!sys, at:Date.now() });
+      while(log.length>60) log.shift();   // keep the last 60 lines
+      set('tuck_chat', JSON.stringify(log));
+      return log;
+    },
+    chatClear(){ set('tuck_chat','[]'); }
   };
   window.Hub=Hub;
 

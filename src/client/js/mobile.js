@@ -8,7 +8,7 @@
                   (navigator.maxTouchPoints > 0) ||
                   matchMedia('(pointer:coarse)').matches;
 
-  const M = { ready: isTouch };
+  const M = { ready: isTouch, axisX:0, axisY:0 };
   window.Mobile = M;
 
   // No-op stubs on desktop so level init code can call unconditionally.
@@ -69,7 +69,7 @@
       if(map[dir]) key(map[dir], on?'keydown':'keyup');
     }
     function reset(){ ['up','down','left','right'].forEach(d=>setKey(d,false));
-      knob.style.left='40px'; knob.style.top='40px'; }
+      M.axisX=0; M.axisY=0; knob.style.left='40px'; knob.style.top='40px'; }
     function handle(x,y){
       const dx=x-cx, dy=y-cy, R=60, mag=Math.hypot(dx,dy)||1;
       const nx=mag>R?dx/mag*R:dx, ny=mag>R?dy/mag*R:dy;
@@ -77,6 +77,10 @@
       const dead=18;
       setKey('left', dx<-dead); setKey('right', dx>dead);
       setKey('up', dy<-dead);   setKey('down', dy>dead);
+      // analog axes (-1..1) past the dead zone, for smooth steering etc.
+      const norm=v=>{ const a=Math.abs(v); if(a<dead) return 0;
+        return (v<0?-1:1)*Math.min(1,(a-dead)/(R-dead)); };
+      M.axisX=norm(nx); M.axisY=norm(ny);
     }
     joy.addEventListener('touchstart',e=>{ e.preventDefault();
       const t=e.changedTouches[0]; id=t.identifier;

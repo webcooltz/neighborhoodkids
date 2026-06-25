@@ -174,6 +174,9 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
 <script src="../js/mobile.js"></script>
 <script src="../js/achievements.js"></script>
 <script src="../js/hub.js"></script>
+<script src="../js/catalog.js"></script>
+<script src="../js/editor.js"></script>
+<script src="../js/coplay.js"></script>
 <script>
 'use strict';
 
@@ -642,24 +645,23 @@ class Goal {
     this.group.add(cylinder(mx,0,zr, bx,0,zr, pR*0.7,postMat)); // bottom right
 
     // Net planes (back, top, sides)
+    // Net panels — each plane's normal must point the right way. The old version
+    // had the back/side planes rotated 90° off (and the right side stuck at zl).
     const netPlanes = [
-      { w: depth, h: this.height, pos:[bx+depth/2, h/2, zl], rx:0, ry:Math.PI/2 },
-      // Back
-      { w: zr-zl, h: this.height, pos:[bx, h/2, (zl+zr)/2], rx:0, ry:0 },
-      // Top
+      // back wall (x = bx): spans mouth width (Z) × height (Y), faces +x
+      { w: zr-zl, h: this.height, pos:[bx, h/2, (zl+zr)/2], rx:0, ry:Math.PI/2 },
+      // roof (y = h): lies flat, spans depth (X) × width (Z)
       { w: depth, h: zr-zl, pos:[bx+depth/2, h, (zl+zr)/2], rx:Math.PI/2, ry:0 },
+      // left side (z = zl): spans depth (X) × height (Y)
+      { w: depth, h: this.height, pos:[bx+depth/2, h/2, zl], rx:0, ry:0 },
+      // right side (z = zr)
+      { w: depth, h: this.height, pos:[bx+depth/2, h/2, zr], rx:0, ry:0 },
     ];
     netPlanes.forEach(({w,h,pos,rx,ry})=>{
-      const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h,Math.round(w/.4),Math.round(h/.4)),netLineMat);
+      const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h,Math.max(1,Math.round(w/.4)),Math.max(1,Math.round(h/.4))),netLineMat);
       mesh.position.set(...pos); mesh.rotation.x=rx; mesh.rotation.y=ry;
       this.group.add(mesh);
     });
-    // Left side net
-    const lSide=new THREE.Mesh(new THREE.PlaneGeometry(depth,this.height,5,5),netLineMat);
-    lSide.position.set(bx+depth/2,h/2,zl);lSide.rotation.y=Math.PI/2;this.group.add(lSide);
-    // Right side net
-    const rSide=new THREE.Mesh(new THREE.PlaneGeometry(depth,this.height,5,5),netLineMat);
-    rSide.position.set(bx+depth/2,h/2,zr);rSide.rotation.y=Math.PI/2;this.group.add(rSide);
 
     // Ground line indicator
     const lineMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent:true, opacity:.6 });
@@ -887,6 +889,8 @@ let levelStartT = 0;
 let levelTime   = 0;
 let totalKicks  = 0;
 let dribbling   = false; // ball follows player until kicked
+let playing     = false; // false = roaming the yard; true = ring/goal run started
+function setRingsVisible(v){ rings.forEach(r=>{ if(r.group) r.group.visible=v; }); if(!v) ringLight.intensity=0; }
 
 const pips      = [0,1,2,3,4].map(i=>document.getElementById('pip'+i));
 const goalPip   = document.getElementById('goal-pip');
@@ -903,19 +907,75 @@ function updateRingHud() {
   if(nextRing>=5) goalPip.classList.add('active');
 }
 
-function startLevel() {
+// PLAY → roam the yard. The ring/goal run only begins when you walk up to the
+// ball and press E (same idea as the other levels).
+function enterYard() {
   introEl.style.display='none';
-  ringHud.style.display='flex';
-  levelActive=true;
-  levelStartT=performance.now();
-  nextRing=0;
-  totalKicks=0;
-  dribbling=true;
+  ringHud.style.display='none';
+  levelActive=true; playing=false;
+  nextRing=0; totalKicks=0; dribbling=false;
+  setRingsVisible(false);
   bphys.reset();
   player.pos.set(0,0,4);
   updateRingHud();
   audioCtx.resume().then(startBirds);
 }
+function startRun() {
+  if(playing) return;
+  levelActive=true; playing=true;
+  ringHud.style.display='flex';
+  setRingsVisible(true);
+  // reset the goal (we may arrive here straight from the picker, not resetLevel)
+  goal.active=false; goal.scored=false;
+  goal.group.traverse(o=>{ if(o.isMesh&&o.material.transparent) o.material.opacity=0.35; });
+  goalPip.classList.remove('active');
+  levelStartT=performance.now();
+  nextRing=0; totalKicks=0; dribbling=true;
+  bphys.reset();
+  updateRingHud();
+  nearEl.style.display='none';
+}
+// ESC out of a run → back to roaming the yard (progress kept; resume via the ball)
+function stopRun(){ playing=false; ringHud.style.display='none'; setRingsVisible(false); dribbling=false; bphys.reset(); }
+
+// ── stage picker (like Sawyer's world list; next stage locks until the prev is done) ──
+let unlocked = Math.max(0, Math.min(LEVELS.length-1, parseInt(localStorage.getItem('tuck_l1_unlocked')||'0',10)||0));
+const stagePicker = (function(){
+  const st=document.createElement('style'); st.textContent=
+    '#stage-picker{position:fixed;inset:0;background:rgba(6,20,8,.93);display:none;flex-direction:column;'+
+    'align-items:center;justify-content:center;gap:14px;z-index:120;font-family:Arial,sans-serif;}'+
+    '#stage-picker.show{display:flex;}'+
+    '#stage-picker .sp-title{color:#a5d6a7;font-size:34px;font-weight:900;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px;}'+
+    '#stage-picker .sp-list{display:flex;flex-direction:column;gap:10px;}'+
+    '#stage-picker .sp-btn{padding:13px 48px;min-width:260px;font-size:16px;font-weight:bold;letter-spacing:2px;'+
+    'border:none;border-radius:26px;cursor:pointer;background:rgba(255,255,255,.1);color:#fff;transition:background .15s,transform .1s;}'+
+    '#stage-picker .sp-btn:hover:not(:disabled){background:#43a047;transform:scale(1.04);}'+
+    '#stage-picker .sp-btn:disabled{opacity:.4;cursor:default;}'+
+    '#stage-picker .sp-cancel{margin-top:6px;padding:9px 30px;font-size:13px;letter-spacing:2px;border:none;'+
+    'border-radius:18px;cursor:pointer;background:rgba(255,255,255,.08);color:rgba(255,255,255,.6);}';
+  document.head.appendChild(st);
+  const ov=document.createElement('div'); ov.id='stage-picker';
+  ov.innerHTML='<div class="sp-title">⚽ Pick a Stage</div><div class="sp-list"></div>'+
+    '<button class="sp-cancel sp-back">↩ Back to Yard</button>'+
+    '<button class="sp-cancel sp-home"></button>';
+  document.body.appendChild(ov);
+  const list=ov.querySelector('.sp-list'); const btns=[];
+  for(let i=0;i<LEVELS.length;i++){ const b=document.createElement('button'); b.className='sp-btn';
+    b.addEventListener('click',()=>{ if(i>unlocked) return; closeStagePicker();
+      currentLevel=i; buildRings(i); playing=false; startRun(); });
+    list.appendChild(b); btns.push(b); }
+  ov.querySelector('.sp-back').addEventListener('click',()=>closeStagePicker());
+  const homeBtn=ov.querySelector('.sp-home');
+  homeBtn.textContent=(window.Hub&&Hub.cameFromLobby())?'⌂ Back to Lobby':'⌂ Main Menu';
+  homeBtn.addEventListener('click',()=>{ if(window.Hub) Hub.home('../'); });
+  return { ov, btns };
+})();
+function openStagePicker(){
+  stagePicker.btns.forEach((b,i)=>{ const lock=i>unlocked, done=i<unlocked;
+    b.disabled=lock; b.textContent=(lock?'🔒 ':done?'✓ ':'▶ ')+'Stage '+(i+1); });
+  stagePicker.ov.classList.add('show');
+}
+function closeStagePicker(){ stagePicker.ov.classList.remove('show'); }
 
 function saveStars(lvl,s){
   const k='tuck_stars_'+lvl;
@@ -925,7 +985,9 @@ function saveStars(lvl,s){
   if(el) el.textContent='★'.repeat(s)+'☆'.repeat(3-s);
 }
 function winLevel() {
-  levelActive=false;
+  levelActive=false; playing=false;
+  unlocked=Math.max(unlocked, Math.min(LEVELS.length-1, currentLevel+1));   // unlock next stage
+  localStorage.setItem('tuck_l1_unlocked', String(unlocked));
   ringLight.intensity=0;
   const secs=((performance.now()-levelStartT)/1000).toFixed(1);
   document.getElementById('win-time').textContent  = `Time: ${secs}s`;
@@ -943,7 +1005,10 @@ function winLevel() {
     nextBtn.textContent='Next Stage →';
     if(starsEl) starsEl.textContent=`Stage ${currentLevel+1} / ${LEVELS.length}`;
   }
-  winScreen.style.display='flex';
+  // instead of the old Play Again / Next / Menu screen, drop straight into the
+  // stage picker (next stage now unlocked) — Back to Yard / Home live on it.
+  setRingsVisible(false); ringHud.style.display='none';
+  openStagePicker();
   audioCtx.resume().then(snd_goal);
 }
 
@@ -965,10 +1030,11 @@ function resetLevel() {
   });
   goalPip.classList.remove('active');
   dribbling=true;
-  startLevel();
+  playing=false;
+  startRun();
 }
 
-document.getElementById('intro-btn').addEventListener('click', startLevel);
+document.getElementById('intro-btn').addEventListener('click', enterYard);
 document.getElementById('replay-btn').addEventListener('click', resetLevel);
 document.getElementById('next-btn').addEventListener('click',()=>{
   if(currentLevel<LEVELS.length-1){
@@ -992,7 +1058,9 @@ document.addEventListener('keydown',e=>{
     case'KeyD':case'ArrowRight': keys.right    =true;break;
     case'ShiftLeft':case'ShiftRight':keys.sprint=true;break;
     case'Space':e.preventDefault();if(player.onGround)jumpQ=true;break;
-    case'KeyR':bphys.reset();dribbling=true;break;
+    case'KeyR':if(playing){bphys.reset();dribbling=true;}break;
+    case'KeyE':if(levelActive&&!playing&&distToBall()<2.6)openStagePicker();break;
+    case'Escape':if(playing)stopRun();else if(stagePicker.ov.classList.contains('show'))closeStagePicker();break;
   }
 });
 document.addEventListener('keyup',e=>{
@@ -1038,7 +1106,7 @@ function distToBall(){
 }
 
 canvas.addEventListener('mousedown',e=>{
-  if(e.button!==0||kickCooldown>0||!levelActive)return;
+  if(e.button!==0||kickCooldown>0||!levelActive||!playing)return;
   // always allow charge when dribbling; require proximity otherwise
   if(dribbling||distToBall()<=2.6){charging=true;chargeT=0;}
 });
@@ -1090,6 +1158,8 @@ const prevBall=new THREE.Vector3();
 
 function tick(){
   requestAnimationFrame(tick);
+  if(editor.isEditing()){ const _n=performance.now(); editor.update(Math.min((_n-_etick)/1000,.05)); _etick=_n; renderer.render(scene,camera); return; }
+  _etick=performance.now();
   const now=performance.now();
   const dt=Math.min((now-prev)/1000,.05);
   prev=now; elapsed+=dt;
@@ -1116,7 +1186,7 @@ function tick(){
   }else{
     bphys.update(dt);
     // Re-acquire ball when close and it's settled
-    if(levelActive&&distToBall()<0.9&&bphys.getSpeed()<2.5){
+    if(playing&&distToBall()<0.9&&bphys.getSpeed()<2.5){
       dribbling=true;
     }
   }
@@ -1145,15 +1215,22 @@ function tick(){
       powerWrap.style.display='none';powerFill.style.width='0%';}
   }
 
-  // Near-ball hint: always show while dribbling, show when near loose ball
-  const showHint=levelActive&&kickCooldown<=0&&(dribbling||distToBall()<=2.4);
-  nearEl.style.display=showHint?'block':'none';
+  // Hint: roam → "press E at the ball"; during a run → the kick hint
+  if(levelActive&&!playing){
+    const near=distToBall()<=2.6;
+    if(near) nearEl.textContent='⚽ Press E to pick a stage';
+    nearEl.style.display=near?'block':'none';
+  }else{
+    const showHint=playing&&kickCooldown<=0&&(dribbling||distToBall()<=2.4);
+    if(showHint) nearEl.textContent='Hold Click to charge, release to kick!';
+    nearEl.style.display=showHint?'block':'none';
+  }
 
   snd_roll(dribbling?0:spd);
   spdEl.textContent=`Speed: ${spd.toFixed(1)}`;
 
-  // ── Level logic ──
-  if(levelActive){
+  // ── Level logic (only during an active run) ──
+  if(playing){
     const currBall=bphys.pos.clone();
 
     rings.forEach(r=>r.update(elapsed));
@@ -1179,6 +1256,14 @@ function tick(){
   updateCamera(dt);
   renderer.render(scene,camera);
 }
+
+// ── room editor (js/editor.js) ──
+const IS_LOCAL = location.protocol==='file:' || ['localhost','127.0.0.1',''].includes(location.hostname);
+const editor = LevelEditor.init({ scene, camera, renderer,
+  level:'level1', global:'LEVEL1_LAYOUT', layoutScript:'../js/level1_layout.js',
+  saveUrl: IS_LOCAL ? 'http://localhost:8787' : '', protect:[player&&player.group].filter(Boolean) });
+editor.registerBase(); editor.applyBakedLayout();
+let _etick=performance.now();
 
 tick();
 

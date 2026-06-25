@@ -157,6 +157,10 @@ html.is-touch.rhythm-on #mc-btns { display:none; }
 <script src="../js/mobile.js"></script>
 <script src="../js/achievements.js"></script>
 <script src="../js/hub.js"></script>
+<script src="../js/catalog.js"></script>
+<script src="../js/editor.js"></script>
+<script src="../js/coplay.js"></script>
+<script src="../js/stageflow.js"></script>
 <script>
 'use strict';
 
@@ -799,6 +803,7 @@ let jumpQ=false;
 const keyBtns=document.querySelectorAll('.key-btn');
 
 document.addEventListener('keydown',e=>{
+  if(e.code==='Escape'){ if(gameActive||levelActive) Stages.exit(); return; }
   if(gameActive){
     // Lane keys
     const laneMap={'KeyA':0,'KeyS':1,'KeyD':2,'KeyF':3};
@@ -860,7 +865,7 @@ function winLevel(acc){
     nextBtn.dataset.action='next';
     document.getElementById('win-stars-earned').textContent=`Song ${currentStage+1} / ${SONGS.length}`;
   }
-  document.getElementById('win').style.display='flex';
+  Stages.complete(currentStage);   // unlock next + show the song picker
   playWin();
 }
 
@@ -888,7 +893,13 @@ function startLevel(){
   audioCtx.resume();
 }
 
-document.getElementById('intro-btn').addEventListener('click',startLevel);
+// Stage picker hub (locked progression)
+const Stages=StageFlow.init({ count:SONGS.length, levelKey:'level3', prefix:'../',
+  label:'🎻 Pick a Song', color:'#7b1fa2',
+  names:Array.from({length:SONGS.length},(_,i)=>'Song '+(i+1)),
+  onPick(i){ setStage(i); resetLevel(); },
+  onExit(){ if(typeof gameActive!=='undefined') gameActive=false; levelActive=false; } });
+document.getElementById('intro-btn').addEventListener('click',()=>{ introEl.style.display='none'; Stages.open(); });
 document.getElementById('replay-btn').addEventListener('click',resetLevel);
 document.getElementById('retry-btn').addEventListener('click',resetLevel);
 document.getElementById('next-btn').addEventListener('click',()=>{
@@ -906,6 +917,8 @@ let prev=performance.now();
 
 function tick(){
   requestAnimationFrame(tick);
+  if(editor.isEditing()){ const _n=performance.now(); editor.update(Math.min((_n-_etick)/1000,.05)); _etick=_n; renderer.render(scene,camera); return; }
+  _etick=performance.now();
   const now=performance.now();
   const dt=Math.min((now-prev)/1000,.05);
   prev=now;
@@ -928,6 +941,14 @@ function tick(){
   updateCamera(dt);
   renderer.render(scene,camera);
 }
+
+// ── room editor (js/editor.js) ──
+const IS_LOCAL = location.protocol==='file:' || ['localhost','127.0.0.1',''].includes(location.hostname);
+const editor = LevelEditor.init({ scene, camera, renderer,
+  level:'level3', global:'LEVEL3_LAYOUT', layoutScript:'../js/level3_layout.js',
+  saveUrl: IS_LOCAL ? 'http://localhost:8787' : '', protect:[player&&player.group].filter(Boolean) });
+editor.registerBase(); editor.applyBakedLayout();
+let _etick=performance.now();
 
 tick();
 

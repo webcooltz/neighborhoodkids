@@ -342,12 +342,6 @@ window.LOBBY_LAYOUT = {
       "z": 37,
       "ry": 0.31
     },
-    "b180_180_0": {
-      "x": 18,
-      "y": 0.015,
-      "z": 18,
-      "ry": 0
-    },
     "b290_160_0": {
       "x": 29,
       "y": 0,
@@ -496,15 +490,16 @@ window.LOBBY_LAYOUT = {
     "b0_-42_1",
     "b0_42_1",
     "b-42_0_1",
-    "b42_0_1"
+    "b42_0_1",
+    "b180_180_0"
   ],
   "adds": [
     {
       "id": "abx0cm313",
       "type": "hydrant",
-      "x": -53.161,
+      "x": -65,
       "y": 0,
-      "z": -4.281,
+      "z": -15,
       "ry": 0
     },
     {
@@ -2279,6 +2274,457 @@ window.LOBBY_LAYOUT = {
           "ly": 0,
           "lz": -2,
           "lry": -1.562
+        }
+      ]
+    },
+    {
+      "id": "g443",
+      "x": -25,
+      "y": 0,
+      "z": -8,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 0,
+          "ly": 0,
+          "lz": -1,
+          "lry": 0
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 0,
+          "ly": 0,
+          "lz": 3,
+          "lry": 0
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 0,
+          "ly": 0,
+          "lz": 1,
+          "lry": 0
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 0,
+          "ly": 0,
+          "lz": -3,
+          "lry": 0
+        }
+      ]
+    },
+    {
+      "id": "g448",
+      "x": -15,
+      "y": 0,
+      "z": -5,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
+        }
+      ]
+    },
+    {
+      "id": "g453",
+      "x": -21,
+      "y": 0,
+      "z": -5,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
+        }
+      ]
+    },
+    {
+      "id": "g458",
+      "x": -30,
+      "y": 0,
+      "z": -5,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
+        }
+      ]
+    },
+    {
+      "id": "g463",
+      "x": -38,
+      "y": 0,
+      "z": -5,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
+        }
+      ]
+    },
+    {
+      "id": "g468",
+      "x": -46,
+      "y": 0,
+      "z": -5,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
+        }
+      ]
+    },
+    {
+      "id": "g473",
+      "x": -53,
+      "y": 0,
+      "z": -8,
+      "ry": -1.57,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
+        }
+      ]
+    },
+    {
+      "id": "g478",
+      "x": -48,
+      "y": 0,
+      "z": -5,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
+        }
+      ]
+    },
+    {
+      "id": "g483",
+      "x": -53,
+      "y": 0,
+      "z": -12,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 0.002,
+          "ly": 0,
+          "lz": 1,
+          "lry": -0.002
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 0.004,
+          "ly": 0,
+          "lz": 3,
+          "lry": -0.002
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -0.002,
+          "ly": 0,
+          "lz": -1,
+          "lry": -0.002
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -0.004,
+          "ly": 0,
+          "lz": -3,
+          "lry": -0.002
+        }
+      ]
+    },
+    {
+      "id": "g488",
+      "x": -8,
+      "y": 0,
+      "z": -5,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
+        }
+      ]
+    },
+    {
+      "id": "g493",
+      "x": 8,
+      "y": 0,
+      "z": -5,
+      "ry": 0,
+      "members": [
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 1,
+          "ly": 0,
+          "lz": -0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": 3,
+          "ly": 0,
+          "lz": -0.002,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -1,
+          "ly": 0,
+          "lz": 0.001,
+          "lry": -1.57
+        },
+        {
+          "kind": "add",
+          "type": "slab",
+          "lx": -3,
+          "ly": 0,
+          "lz": 0.002,
+          "lry": -1.57
         }
       ]
     }

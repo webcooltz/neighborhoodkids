@@ -18,7 +18,10 @@ const PORT = process.env.PORT || 8787;
 // HTTP server: handles the editor's "Save layout" POST + CORS preflight.
 // (WebSocket server is attached to it below.)
 // Paths are relative to this file (src/server/); the client lives in src/client/.
-const ALLOWED_LAYOUTS = { lobby: '../client/js/lobby_layout.js' };  // whitelist of saveable levels
+const ALLOWED_LAYOUTS = {                                   // whitelist of saveable levels
+  lobby: '../client/js/lobby_layout.js',
+  brooklynn: '../client/js/brooklynn_layout.js',
+};
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -38,8 +41,10 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const payload = JSON.parse(body);
-        const file = ALLOWED_LAYOUTS[payload.level || 'lobby'];
-        if (!file) { res.writeHead(400); res.end('unknown level'); return; }
+        // Any level can save its own layout: sanitize the name → js/<level>_layout.js
+        const safe = String(payload.level || 'lobby').toLowerCase().replace(/[^a-z0-9_]/g, '');
+        if (!safe) { res.writeHead(400); res.end('bad level'); return; }
+        const file = ALLOWED_LAYOUTS[safe] || ('../client/js/' + safe + '_layout.js');
         // sanity: layout must be a plain object
         const layout = payload.layout || {};
         const out = 'window.' + (payload.global || 'LOBBY_LAYOUT') + ' = ' +

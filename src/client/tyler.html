@@ -115,6 +115,9 @@
 <script src="js/mobile.js"></script>
 <script src="js/achievements.js"></script>
 <script src="js/hub.js"></script>
+<script src="js/catalog.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/coplay.js"></script>
 <script>
 'use strict';
 
@@ -552,6 +555,8 @@ document.getElementById('win-replay').addEventListener('click',startGame);
 let prev=performance.now();
 function tick(){
   requestAnimationFrame(tick);
+  if(editor.isEditing()){ const _n=performance.now(); editor.update(Math.min((_n-_etick)/1000,.05)); _etick=_n; renderer.render(scene,camera); return; }
+  _etick=performance.now();
   const now=performance.now(), dt=Math.min((now-prev)/1000,.05); prev=now;
 
   if(running){
@@ -663,6 +668,15 @@ function tick(){
   renderer.render(scene,camera);
 }
 player.parts=player.group.userData.parts;
+
+// ── room editor (js/editor.js) ──
+const IS_LOCAL = location.protocol==='file:' || ['localhost','127.0.0.1',''].includes(location.hostname);
+const editor = LevelEditor.init({ scene, camera, renderer,
+  level:'tyler', global:'TYLER_LAYOUT', layoutScript:'js/tyler_layout.js',
+  saveUrl: IS_LOCAL ? 'http://localhost:8787' : '', protect:[player&&player.group].filter(Boolean) });
+editor.registerBase(); editor.applyBakedLayout();
+let _etick=performance.now();
+
 tick();
 
 function hitZombie(z){

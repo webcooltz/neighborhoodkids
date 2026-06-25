@@ -155,6 +155,10 @@ canvas#c { display:block; width:100vw; height:100vh; }
 <script src="../js/mobile.js"></script>
 <script src="../js/achievements.js"></script>
 <script src="../js/hub.js"></script>
+<script src="../js/catalog.js"></script>
+<script src="../js/editor.js"></script>
+<script src="../js/coplay.js"></script>
+<script src="../js/stageflow.js"></script>
 <script>
 'use strict';
 
@@ -675,7 +679,7 @@ function winLevel(){
     nextBtn.textContent='Next Belt →'; nextBtn.dataset.action='next';
     document.getElementById('win-stars-earned').textContent=`Belt ${currentStage+1} / ${SPEED_STAGES.length}`;
   }
-  document.getElementById('win').style.display='flex';
+  Stages.complete(currentStage);   // unlock next + show the belt picker
   hideGameUI();
   playFinish();
 }
@@ -855,6 +859,7 @@ function updateCameraKarate(dt){
 
 // ── INPUT ────────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
+  if(e.code==='Escape'){ if(levelActive) Stages.exit(); return; }
   if(!levelActive) return;
   if(gamePhase==='karate'){
     if(e.code==='Space'){
@@ -870,7 +875,7 @@ document.addEventListener('keydown',e=>{
     case'KeyD':case'ArrowRight': walkKeys.right=true;    break;
     case'ShiftLeft':case'ShiftRight': walkKeys.sprint=true; break;
     case'KeyE':
-      if(!finished && distToStand()<2.6) startKarate(); break;
+      if(distToStand()<2.6) Stages.open(); break;   // open the belt picker
   }
 });
 document.addEventListener('keyup',e=>{
@@ -904,6 +909,12 @@ function startLevel(){
   audioCtx.resume();
 }
 
+// Stage picker hub (locked progression) — open it from the training mat
+const Stages=StageFlow.init({ count:SPEED_STAGES.length, levelKey:'level6', prefix:'../',
+  label:'🥋 Pick a Belt', color:'#ab47bc',
+  names:Array.from({length:SPEED_STAGES.length},(_,i)=>'Belt '+(i+1)),
+  onPick(i){ setStage(i); levelActive=true; resetLevel(); startKarate(); },
+  onExit(){ gamePhase='walk'; levelActive=false; } });
 document.getElementById('intro-btn').addEventListener('click',startLevel);
 document.getElementById('replay-btn').addEventListener('click',resetLevel);
 document.getElementById('retry-btn').addEventListener('click',resetLevel);
@@ -922,6 +933,8 @@ let prev=performance.now();
 
 function tick(){
   requestAnimationFrame(tick);
+  if(editor.isEditing()){ const _n=performance.now(); editor.update(Math.min((_n-_etick)/1000,.05)); _etick=_n; renderer.render(scene,camera); return; }
+  _etick=performance.now();
   const now=performance.now(), dt=Math.min((now-prev)/1000,.05); prev=now;
 
   // Piece physics
@@ -1000,6 +1013,14 @@ function tick(){
 
   renderer.render(scene,camera);
 }
+
+// ── room editor (js/editor.js) ──
+const IS_LOCAL = location.protocol==='file:' || ['localhost','127.0.0.1',''].includes(location.hostname);
+const editor = LevelEditor.init({ scene, camera, renderer,
+  level:'level6', global:'LEVEL6_LAYOUT', layoutScript:'../js/level6_layout.js',
+  saveUrl: IS_LOCAL ? 'http://localhost:8787' : '', protect:[player&&player.group].filter(Boolean) });
+editor.registerBase(); editor.applyBakedLayout();
+let _etick=performance.now();
 
 tick();
 

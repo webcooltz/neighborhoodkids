@@ -172,6 +172,9 @@ canvas#c { display:block; width:100vw; height:100vh; }
 <script src="../js/mobile.js"></script>
 <script src="../js/achievements.js"></script>
 <script src="../js/hub.js"></script>
+<script src="../js/catalog.js"></script>
+<script src="../js/editor.js"></script>
+<script src="../js/coplay.js"></script>
 <script>
 'use strict';
 
@@ -962,6 +965,8 @@ let prev=performance.now();
 
 function tick(){
   requestAnimationFrame(tick);
+  if(editor.isEditing()){ const _n=performance.now(); editor.update(Math.min((_n-_etick)/1000,.05)); _etick=_n; renderer.render(scene,camera); return; }
+  _etick=performance.now();
   const now=performance.now(),dt=Math.min((now-prev)/1000,.05); prev=now;
 
   if(gamePhase==='walk'){
@@ -1026,6 +1031,14 @@ function tick(){
 
   renderer.render(scene,camera);
 }
+
+// ── room editor (js/editor.js) — scans the bedroom container ──
+const IS_LOCAL = location.protocol==='file:' || ['localhost','127.0.0.1',''].includes(location.hostname);
+const editor = LevelEditor.init({ scene, camera, renderer, root:bedroomGroup,
+  level:'level8', global:'LEVEL8_LAYOUT', layoutScript:'../js/level8_layout.js',
+  saveUrl: IS_LOCAL ? 'http://localhost:8787' : '', protect:[walkPlayer&&walkPlayer.group].filter(Boolean) });
+editor.registerBase(); editor.applyBakedLayout();
+let _etick=performance.now();
 
 tick();
 

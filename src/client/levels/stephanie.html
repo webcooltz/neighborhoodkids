@@ -119,6 +119,10 @@
 <script src="../js/mobile.js"></script>
 <script src="../js/achievements.js"></script>
 <script src="../js/hub.js"></script>
+<script src="../js/catalog.js"></script>
+<script src="../js/editor.js"></script>
+<script src="../js/coplay.js"></script>
+<script src="../js/stageflow.js"></script>
 <script>
 'use strict';
 
@@ -322,6 +326,7 @@ addEventListener('keydown',e=>{
     case'KeyA':case'ArrowLeft':keys.left=true;break;
     case'KeyD':case'ArrowRight':keys.right=true;break;
     case'Space':e.preventDefault();nosKey=true;break;
+    case'Escape':if(running)Stages.exit();break;   // bail out → stage picker
   }
 });
 addEventListener('keyup',e=>{
@@ -354,7 +359,9 @@ function updateCar(dt){
   const cap=MAXSPEED*(nosActive?NOS_SPEED:1)*(onRoadNow?1:GRASS_MULT);
   cs.speed=Math.max(REV_MAX*(onRoadNow?1:GRASS_MULT),Math.min(cap,cs.speed));
   // steering scales with speed; reverse flips it
-  const steerIn=(keys.left?1:0)-(keys.right?1:0);
+  // analog steering on mobile (gentler than full-tilt = full-lock); keys on desktop
+  let steerIn=(keys.left?1:0)-(keys.right?1:0);
+  if(window.Mobile&&Mobile.ready) steerIn=-Mobile.axisX;
   const grip=Math.min(1,Math.abs(cs.speed)/6);
   cs.heading+=steerIn*TURN*dt*grip*(cs.speed<0?-1:1);
   cs.pos.x+=Math.sin(cs.heading)*cs.speed*dt;
@@ -406,6 +413,7 @@ function stageComplete(){
     blip(700,.16); setTimeout(()=>blip(990,.2,'triangle'),120);
     flash('STAGE '+(stageIndex+1)+' CLEARED!');
     const next=stageIndex+1;
+    Stages.unlock(next);   // unlock the next stage in the picker
     setTimeout(()=>{ if(!ended) loadStage(next); }, 1300);
   } else { win(); }
 }
@@ -437,6 +445,7 @@ function win(){
   if(ended) return; ended=true; running=false;
   const stars=3;   // cleared all 5 stages
   saveStars(stars);
+  Stages.unlock(STAGES.length-1);   // all stages unlocked
   chord([523,659,784],.5); setTimeout(()=>chord([659,784,1047],.6),180);
   document.getElementById('win-sub').textContent='All '+STAGES.length+' stages cleared — Stephanie wins the rally!';
   document.getElementById('win-stars').textContent='★'.repeat(stars)+'☆'.repeat(3-stars);
@@ -462,23 +471,32 @@ function loadStage(i){
   flash('STAGE '+(i+1)+': '+st.name);
   running=true;
 }
-function startGame(){
+function startGame(i){
   // drop focus off the Start/Retry button so Space fires NOS, not a re-click
   if(document.activeElement&&document.activeElement.blur) document.activeElement.blur();
   document.getElementById('win').classList.remove('show');
   document.getElementById('fail').classList.remove('show');
   document.getElementById('start').classList.remove('show');
-  ac(); loadStage(0);
+  ac(); loadStage(typeof i==='number'?i:0);
 }
-document.getElementById('start-btn').addEventListener('click',startGame);
-document.getElementById('retry-btn').addEventListener('click',startGame);
-document.getElementById('win-replay').addEventListener('click',startGame);
+// Stage selection screen (locked progression) instead of an instant start
+const Stages=StageFlow.init({ count:STAGES.length, levelKey:'stephanie', prefix:'../',
+  label:'🚗 Pick a Stage', color:'#fb8c00',
+  names:STAGES.map((s,i)=>'Stage '+(i+1)+(s&&s.name?' · '+s.name:'')),
+  onPick(i){ startGame(i); },
+  onExit(){ ended=true; running=false; } });
+document.getElementById('start-btn').addEventListener('click',()=>{
+  document.getElementById('start').classList.remove('show'); Stages.open(); });
+document.getElementById('retry-btn').addEventListener('click',()=>startGame(stageIndex));
+document.getElementById('win-replay').addEventListener('click',()=>Stages.open());
 paintRings(); updateHud();
 
 // ─── LOOP ─────────────────────────────────────────────────────────────────────
 let prev=performance.now();
 function tick(){
   requestAnimationFrame(tick);
+  if(editor.isEditing()){ const _n=performance.now(); editor.update(Math.min((_n-_etick)/1000,.05)); _etick=_n; renderer.render(scene,camera); return; }
+  _etick=performance.now();
   const now=performance.now(), dt=Math.min((now-prev)/1000,.05); prev=now;
   if(running){
     updateNos(dt);
@@ -496,6 +514,15 @@ function tick(){
   updateCamera(dt);
   renderer.render(scene,camera);
 }
+
+// ── room editor (js/editor.js) ──
+const IS_LOCAL = location.protocol==='file:' || ['localhost','127.0.0.1',''].includes(location.hostname);
+const editor = LevelEditor.init({ scene, camera, renderer,
+  level:'stephanie', global:'STEPHANIE_LAYOUT', layoutScript:'../js/stephanie_layout.js',
+  saveUrl: IS_LOCAL ? 'http://localhost:8787' : '', protect:[typeof car!=='undefined'&&car].filter(Boolean) });
+editor.registerBase(); editor.applyBakedLayout();
+let _etick=performance.now();
+
 tick();
 </script>
 </body>

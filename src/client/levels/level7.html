@@ -157,6 +157,10 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
 <script src="../js/mobile.js"></script>
 <script src="../js/achievements.js"></script>
 <script src="../js/hub.js"></script>
+<script src="../js/catalog.js"></script>
+<script src="../js/editor.js"></script>
+<script src="../js/coplay.js"></script>
+<script src="../js/stageflow.js"></script>
 <script>
 'use strict';
 
@@ -661,7 +665,7 @@ function winLevel(){
     nextBtn.textContent='Next Pond →'; nextBtn.dataset.action='next';
     document.getElementById('win-stars-earned').textContent=`Pond ${currentStage+1} / ${STAGES.length}`;
   }
-  document.getElementById('win').style.display='flex';
+  Stages.complete(currentStage);   // unlock next + show the pond picker
   audioCtx.resume().then(snd_win);
 }
 
@@ -692,6 +696,7 @@ function resetLevel(){
 const keys={forward:false,backward:false,left:false,right:false,sprint:false,jump:false};
 
 document.addEventListener('keydown',e=>{
+  if(e.code==='Escape'){ if(levelActive) Stages.exit(); return; }
   switch(e.code){
     case'KeyW':case'ArrowUp':    keys.forward=true;  break;
     case'KeyS':case'ArrowDown':  keys.backward=true; break;
@@ -755,6 +760,8 @@ let prev=performance.now(),elapsed=0;
 
 function tick(){
   requestAnimationFrame(tick);
+  if(editor.isEditing()){ const _n=performance.now(); editor.update(Math.min((_n-_etick)/1000,.05)); _etick=_n; renderer.render(scene,camera); return; }
+  _etick=performance.now();
   const now=performance.now(),dt=Math.min((now-prev)/1000,.05);
   prev=now; elapsed+=dt;
 
@@ -827,7 +834,13 @@ function tick(){
   renderer.render(scene,camera);
 }
 
-document.getElementById('intro-btn').addEventListener('click',startLevel);
+// Stage picker hub (locked progression)
+const Stages=StageFlow.init({ count:STAGES.length, levelKey:'level7', prefix:'../',
+  label:'🎣 Pick a Pond', color:'#1565c0',
+  names:Array.from({length:STAGES.length},(_,i)=>'Pond '+(i+1)),
+  onPick(i){ setStage(i); resetLevel(); },
+  onExit(){ levelActive=false; if(player.isFishing)player.stopFishing(); } });
+document.getElementById('intro-btn').addEventListener('click',()=>{ document.getElementById('intro').style.display='none'; Stages.open(); });
 document.getElementById('replay-btn').addEventListener('click',resetLevel);
 document.getElementById('next-btn').addEventListener('click',()=>{
   if(document.getElementById('next-btn').dataset.action==='next'){
@@ -837,6 +850,14 @@ document.getElementById('next-btn').addEventListener('click',()=>{
     window.location.href='level8.html';
   }
 });
+
+// ── room editor (js/editor.js) ──
+const IS_LOCAL = location.protocol==='file:' || ['localhost','127.0.0.1',''].includes(location.hostname);
+const editor = LevelEditor.init({ scene, camera, renderer,
+  level:'level7', global:'LEVEL7_LAYOUT', layoutScript:'../js/level7_layout.js',
+  saveUrl: IS_LOCAL ? 'http://localhost:8787' : '', protect:[player&&player.group].filter(Boolean) });
+editor.registerBase(); editor.applyBakedLayout();
+let _etick=performance.now();
 
 tick();
 
