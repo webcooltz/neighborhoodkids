@@ -1074,7 +1074,10 @@ function updatePortals(){
   nearPortal=(!editMode&&started)?best:null;
   const el=document.getElementById('portal-prompt');
   if(nearPortal){ el.style.display='block';
-    el.innerHTML='Press <b>E</b> / ▶ to play <b>'+nearPortal.name+'</b> — '+nearPortal.sub; }
+    const upd=(window.Hub&&Hub.isUpdated(nearPortal.file))
+      ? ' <span style="background:#ff3b6b;color:#fff;font:bold 10px/1 Arial;letter-spacing:1px;'
+        +'padding:3px 6px;border-radius:9px;vertical-align:middle">UPDATED</span>' : '';
+    el.innerHTML='Press <b>E</b> / ▶ to play <b>'+nearPortal.name+'</b> — '+nearPortal.sub+upd; }
   else el.style.display='none';
 }
 function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }

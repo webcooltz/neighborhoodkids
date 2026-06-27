@@ -27,6 +27,19 @@
     // Lobby asks: did we just come back from a minigame?
     isReturning(){ if(sget('tuck_return')==='1'){ sdel('tuck_return'); return true; } return false; },
 
+    // ── "UPDATED" badges ──────────────────────────────────────────────────
+    // Bump a level's version here whenever you change that level. A card/portal
+    // shows an UPDATED badge until the player opens that level, then it clears.
+    LEVEL_VERSIONS:{
+      level1:'1', level2:'1', level3:'1', level4:'1',
+      level5:'1', level6:'1', level7:'1', level8:'1',
+    },
+    levelKey(file){ const m=String(file||'').match(/([a-z0-9_]+)\.html/i); return m?m[1].toLowerCase():''; },
+    isUpdated(file){ const k=Hub.levelKey(file), v=Hub.LEVEL_VERSIONS[k];
+      return !!v && get('tuck_seen_'+k)!==v; },
+    markSeen(file){ const k=Hub.levelKey(file), v=Hub.LEVEL_VERSIONS[k];
+      if(v) set('tuck_seen_'+k, v); },
+
     // ── shared chat history (persists across lobby ↔ minigames) ──
     chatLog(){ try{ return JSON.parse(get('tuck_chat')||'[]'); }catch(e){ return []; } },
     chatPush(name,text,sys){
@@ -43,9 +56,22 @@
   // Drop a persistent "go home" button into every minigame so you can bail out
   // mid-play (not only from the win/retry screens). Skips pages that already
   // have their own #menu-link (lobby, stephanie, tyler).
+  // First time we ever see a level, record its current version silently so the
+  // badge only fires on a LATER version bump (not for brand-new installs).
+  function seedSeenBaseline(){
+    Object.keys(Hub.LEVEL_VERSIONS).forEach(function(k){
+      if(get('tuck_seen_'+k)===null) set('tuck_seen_'+k, Hub.LEVEL_VERSIONS[k]);
+    });
+  }
+
+  // Opening a level page counts as "playing" it → clear its UPDATED badge.
+  function markCurrentSeen(){
+    if(/\/levels\//.test(location.pathname)) Hub.markSeen(location.pathname);
+  }
+
   function injectHomeButton(){
     if(document.getElementById('menu-link')||document.getElementById('hub-home-btn')) return;
-    if(/lobby\.html$/.test(location.pathname)) return;
+    if(/(lobby|index)\.html$/.test(location.pathname)||location.pathname.replace(/\/$/,'').endsWith('/client')) return;
     const prefix=location.pathname.indexOf('/levels/')>=0?'../':'';
     const b=document.createElement('button');
     b.id='hub-home-btn';
@@ -56,6 +82,8 @@
     b.addEventListener('click',function(){ Hub.home(prefix); });
     document.body.appendChild(b);
   }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',injectHomeButton);
-  else injectHomeButton();
+  seedSeenBaseline();   // sync (localStorage only) so badge-renderers see correct state
+  function onReady(){ injectHomeButton(); markCurrentSeen(); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',onReady);
+  else onReady();
 })();

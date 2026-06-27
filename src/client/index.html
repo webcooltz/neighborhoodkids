@@ -382,9 +382,25 @@ header {
   </div>
 </div>
 
+<script src="js/hub.js"></script>
 <script src="js/achievements.js"></script>
 <script>
 (function(){
+  // ── UPDATED badges: flag cards whose level changed since the player last opened it.
+  (function(){
+    if(!window.Hub) return;
+    document.querySelectorAll('.card.playable[onclick]').forEach(function(card){
+      var m=String(card.getAttribute('onclick')||'').match(/levels\/([a-z0-9_]+\.html)/i);
+      if(!m||!Hub.isUpdated(m[1])) return;
+      var b=document.createElement('div'); b.className='upd-badge'; b.textContent='UPDATED';
+      b.style.cssText='position:absolute;top:8px;right:8px;z-index:3;background:#ff3b6b;color:#fff;'+
+        'font:bold 10px/1 Arial;letter-spacing:1px;padding:4px 7px;border-radius:10px;'+
+        'box-shadow:0 2px 6px rgba(0,0,0,.35);pointer-events:none';
+      if(getComputedStyle(card).position==='static') card.style.position='relative';
+      card.appendChild(b);
+    });
+  })();
+
   [1,2,3,4,5,6,7,8,9,10].forEach(function(n){
     var s=parseInt(localStorage.getItem('tuck_stars_'+n)||'0');
     var el=document.getElementById('stars-'+n);

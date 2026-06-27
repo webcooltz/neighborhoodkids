@@ -630,8 +630,33 @@ function tick(){
       const dx=player.pos.x-z.group.position.x, dz=player.pos.z-z.group.position.z;
       const d=Math.hypot(dx,dz);
       z.phase+=dt*5;
-      if(d>1.3){ const nx=z.group.position.x+dx/d*z.speed*dt, nz=z.group.position.z+dz/d*z.speed*dt;
-        const np={x:nx,z:nz}; collide(np,.45); z.group.position.x=np.x; z.group.position.z=np.z; }
+      if(d>1.3){
+        let mx=dx/d, mz=dz/d;
+        // obstacle avoidance: if a building blocks the straight path, steer around it
+        let block=null,bd=1e9;
+        for(const c of colliders){
+          const cx=c.x-z.group.position.x, cz=c.z-z.group.position.z, cd=Math.hypot(cx,cz);
+          if(cd>c.r+3) continue;                 // too far to matter
+          if(cx*mx+cz*mz<=0) continue;           // behind the zombie, ignore
+          if(cd<bd){ bd=cd; block=c; }
+        }
+        if(block){ // tangential steer around the blocking collider
+          const cx=block.x-z.group.position.x, cz=block.z-z.group.position.z, cd=Math.hypot(cx,cz)||1;
+          // pick the tangent that points more toward the player
+          const t1x=-cz/cd, t1z=cx/cd, t2x=cz/cd, t2z=-cx/cd;
+          const useT1=(t1x*mx+t1z*mz)>=(t2x*mx+t2z*mz);
+          const tx=useT1?t1x:t2x, tz=useT1?t1z:t2z;
+          mx+=tx*1.6; mz+=tz*1.6;
+          const ml=Math.hypot(mx,mz)||1; mx/=ml; mz/=ml;
+        }
+        const ox=z.group.position.x, oz=z.group.position.z;
+        const np={x:ox+mx*z.speed*dt,z:oz+mz*z.speed*dt}; collide(np,.45);
+        z.group.position.x=np.x; z.group.position.z=np.z;
+        // failsafe: if barely moved (wedged), slide sideways so it can never deadlock the wave
+        if(Math.hypot(np.x-ox,np.z-oz)<z.speed*dt*.3){
+          const sp={x:ox+(-mz)*z.speed*dt,z:oz+(mx)*z.speed*dt}; collide(sp,.45);
+          z.group.position.x=sp.x; z.group.position.z=sp.z;
+        }
       z.group.rotation.y=Math.atan2(dx,dz);
       // shamble sway
       z.group.position.y=Math.abs(Math.sin(z.phase))*.06;
