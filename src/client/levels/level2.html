@@ -932,6 +932,7 @@ tick();
 // ── Mobile touch controls ──
 if(Mobile.ready){
   Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.look((dx,dy)=>{ camTheta-=dx*.005; camPhi=Math.max(.05,Math.min(1.25,camPhi-dy*.005)); });
   Mobile.button({label:'JUMP',code:'Space'});
   Mobile.button({label:'RUN',code:'ShiftLeft'});
   // Tap the scene to shoot web at that point

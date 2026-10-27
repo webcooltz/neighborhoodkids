@@ -45,6 +45,11 @@
   .overlay{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;
     background:rgba(4,6,10,.82);padding:18px}
   .overlay.show{display:flex}
+  /* Mobile joystick/buttons sit at z9000 above the overlays — hide them on the
+     start / win / game-over screens so they don't eat the Start button tap. */
+  html.is-touch #mc-joy, html.is-touch #mc-btns{ display:none !important; }
+  html.is-touch body.playing #mc-joy{ display:block !important; }
+  html.is-touch body.playing #mc-btns{ display:flex !important; }
   .panel{background:linear-gradient(160deg,#1a2030,#0c1018);border:1px solid rgba(255,255,255,.14);
     border-radius:18px;padding:28px 30px;max-width:440px;width:100%;text-align:center;
     box-shadow:0 14px 50px rgba(0,0,0,.6)}
@@ -524,17 +529,18 @@ function startGame(){
   player.pos.set(0,0,9); player.facing=Math.PI; player.hp=MAX_HP; player.water=MAX_WATER;
   player.group.position.copy(player.pos); kills=0;
   running=true; ended=false; startT=performance.now();
+  document.body.classList.add('playing');   // reveal mobile controls
   startWave(0); updateHud();
 }
 let startT=0;
 
 function gameOver(){
-  running=false; ended=true;
+  running=false; ended=true; document.body.classList.remove('playing');
   document.getElementById('go-sub').textContent='You splashed '+kills+' zombies before going down.';
   document.getElementById('gameover').classList.add('show');
 }
 function winGame(){
-  running=false; ended=true;
+  running=false; ended=true; document.body.classList.remove('playing');
   const secs=((performance.now()-startT)/1000).toFixed(0);
   const stars = player.hp>66?3 : player.hp>30?2 : 1;
   document.getElementById('win-sub').textContent=
@@ -547,9 +553,16 @@ function winGame(){
   document.getElementById('win').classList.add('show');
 }
 
-document.getElementById('start-btn').addEventListener('click',startGame);
-document.getElementById('retry-btn').addEventListener('click',startGame);
-document.getElementById('win-replay').addEventListener('click',startGame);
+// Bind both click and touch so taps start the game on mobile (some mobile
+// browsers swallow the synthesized click on overlay buttons).
+function onTap(id,fn){
+  const el=document.getElementById(id); if(!el) return;
+  el.addEventListener('click',fn);
+  el.addEventListener('touchend',e=>{ e.preventDefault(); e.stopPropagation(); fn(e); },{passive:false});
+}
+onTap('start-btn',startGame);
+onTap('retry-btn',startGame);
+onTap('win-replay',startGame);
 
 // ─── LOOP ─────────────────────────────────────────────────────────────────────
 let prev=performance.now();

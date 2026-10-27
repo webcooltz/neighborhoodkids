@@ -1045,6 +1045,7 @@ tick();
 // ── Mobile touch controls ──
 if(Mobile.ready){
   Mobile.joystick({up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'});
+  Mobile.look((dx,dy)=>{ camTheta-=dx*.005; camPhi=Math.max(.06,Math.min(1.2,camPhi-dy*.005)); });
   Mobile.button({label:'E',code:'KeyE'});
   Mobile.button({label:'JUMP',code:'Space'});
 }

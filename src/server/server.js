@@ -12,8 +12,26 @@ const { WebSocketServer } = require('ws');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { cleanText, sanitizeObj, pruneNotes, makeNote } = require('./lib');
 
 const PORT = process.env.PORT || 8787;
+
+// ─── MESSAGE BOARD (persists 1 week) ────────────────────────────────────────
+const BOARD_FILE = process.env.BOARD_FILE || path.join(__dirname, 'board.json');
+let board = [];
+try { board = JSON.parse(fs.readFileSync(BOARD_FILE, 'utf8')); if (!Array.isArray(board)) board = []; }
+catch (e) { board = []; }
+let boardNextId = board.reduce((m, n) => Math.max(m, n.id || 0), 0) + 1;
+function pruneBoard() {
+  const before = board.length;
+  board = pruneNotes(board);
+  if (board.length !== before) saveBoard();
+}
+function saveBoard() {
+  try { fs.writeFileSync(BOARD_FILE, JSON.stringify(board)); }
+  catch (e) { console.error('board save failed:', e.message); }
+}
+pruneBoard();
 
 // HTTP server: handles the editor's "Save layout" POST + CORS preflight.
 // (WebSocket server is attached to it below.)
@@ -32,6 +50,33 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end(liveCount() + ' players connected');
+    return;
+  }
+
+  // Message board: read all current (non-expired) notes.
+  if (req.method === 'GET' && req.url === '/board') {
+    pruneBoard();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(board));
+    return;
+  }
+
+  // Message board: post a new note ({ name, text, img }). Text/name are
+  // profanity-filtered; img is an optional PNG data-URL drawing.
+  if (req.method === 'POST' && req.url === '/board') {
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 2e5) req.destroy(); });
+    req.on('end', () => {
+      try {
+        const clean = makeNote(JSON.parse(body));
+        if (!clean) { res.writeHead(400); res.end('empty note'); return; }
+        const note = { id: boardNextId++, ...clean, ts: Date.now() };
+        board.push(note); pruneBoard(); saveBoard();
+        broadcast({ t: 'board', note });          // live-update any open boards
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, note }));
+      } catch (e) { res.writeHead(500); res.end('post failed: ' + e.message); }
+    });
     return;
   }
 
@@ -71,18 +116,6 @@ const MAX_OBJECTS = 10;    // live objects per player
 const PLACE_COOLDOWN = 1000;     // ms between placements
 const GLOBAL_OBJECT_CAP = 500;   // safety ceiling for the whole world
 
-// Validate/trim an incoming object so a client can't push junk or huge payloads.
-function sanitizeObj(o) {
-  if (!o || typeof o !== 'object') return null;
-  const id = String(o.id || '').slice(0, 40);
-  const type = String(o.type || '').slice(0, 40);
-  if (!id || !type) return null;
-  const num = (v) => { v = +v; return Number.isFinite(v) ? Math.max(-1000, Math.min(1000, v)) : 0; };
-  const e = { id, type, x: num(o.x), y: num(o.y), z: num(o.z), ry: num(o.ry) };
-  if (o.text != null) e.text = String(o.text).slice(0, 200);
-  return e;
-}
-
 function broadcast(obj, exceptWs) {
   const data = JSON.stringify(obj);
   for (const client of wss.clients) {
@@ -100,10 +133,21 @@ function broadcastCount() {
   broadcast({ t: 'count', n: liveCount() });
 }
 
+// ── Cleanly remove a player and tell everyone. Safe to call more than once. ──
+function dropPlayer(ws) {
+  const self = players.get(ws);
+  if (!self) return;                 // already removed
+  players.delete(ws);
+  if (self.joined) broadcast({ t: 'leave', id: self.id });
+  broadcastCount();
+}
+
 wss.on('connection', (ws) => {
   const id = nextId++;
   const self = { id, name: 'Player', char: 'dawson', x: 0, z: 9, ry: Math.PI, ride: 'none', hold: 'none', joined: false, lastPlace: 0, placeCount: 0 };
   players.set(ws, self);
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
 
   // Tell the newcomer the current count right away (menu badge / lobby HUD).
   ws.send(JSON.stringify({ t: 'count', n: liveCount() }));
@@ -114,7 +158,7 @@ wss.on('connection', (ws) => {
 
     if (msg.t === 'join') {
       self.joined = true;
-      self.name = String(msg.name || 'Player').slice(0, 16);
+      self.name = cleanText(String(msg.name || 'Player')).slice(0, 16);
       self.char = String(msg.char || 'dawson');
       self.ride = String(msg.ride || 'none');
       self.hold = String(msg.hold || 'none');
@@ -155,19 +199,39 @@ wss.on('connection', (ws) => {
       placed.push({ owner: id, entry });
       broadcast({ t: 'place', obj: entry, owner: id }, ws);
     } else if (msg.t === 'chat' && self.joined) {
-      const text = String(msg.text || '').slice(0, 200);
+      const text = cleanText(String(msg.text || '')).slice(0, 200);
       if (text) broadcast({ t: 'chat', id, name: self.name, text }, ws);
+    } else if (msg.t === 'leave') {
+      // Explicit leave (client navigating away). Drop now so the count updates
+      // immediately instead of waiting for the TCP close to be noticed.
+      dropPlayer(ws);
+      try { ws.close(); } catch (e) {}
     }
   });
 
-  ws.on('close', () => {
-    const wasJoined = self.joined;
-    players.delete(ws);
-    if (wasJoined) broadcast({ t: 'leave', id });
-    broadcastCount();
-  });
+  ws.on('close', () => dropPlayer(ws));
 });
 
-server.listen(PORT, () => {
-  console.log('Lobby server listening on ws://localhost:' + PORT + ' (HTTP save endpoint on same port)');
-});
+// ── Heartbeat: ping every 30s and terminate sockets that don't pong back.
+// Without this, half-open connections (mobile sleep, proxy drops) linger and
+// keep inflating the player count. terminate() fires 'close' → dropPlayer().
+const HEARTBEAT_MS = 30000;
+const heartbeat = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch (e) {}
+  }
+}, HEARTBEAT_MS);
+heartbeat.unref();   // don't keep the process alive (matters for the test runner)
+wss.on('close', () => clearInterval(heartbeat));
+
+// Only auto-listen when run directly (`npm start`). When required by a test the
+// suite starts it on an ephemeral port itself.
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log('Lobby server listening on ws://localhost:' + PORT + ' (HTTP save endpoint on same port)');
+  });
+}
+
+module.exports = { server, wss };

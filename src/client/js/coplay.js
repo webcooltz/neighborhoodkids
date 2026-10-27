@@ -103,9 +103,15 @@
         case'chat': if(msg.id!==myId) addMsg(msg.name||'Player', String(msg.text||''), false); break;
       } };
     ws.onclose=()=>{ netOn=false; setCount(countEl?countEl.querySelector('.n').textContent:1); ws=null;
-      setTimeout(connect, 4000); };   // auto-reconnect
+      if(!leaving) setTimeout(connect, 4000); };   // auto-reconnect unless we're leaving
     ws.onerror=()=>{ try{ ws.close(); }catch(e){} };
   }
+  // Tell the server we're gone the instant we navigate away so the online count
+  // drops right away (pagehide is the reliable mobile/bfcache unload signal).
+  let leaving=false;
+  function leave(){ leaving=true; try{ send({t:'leave'}); ws&&ws.close(); }catch(e){} }
+  addEventListener('pagehide', leave);
+  addEventListener('beforeunload', leave);
   function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
 
   function sendChat(){ const text=(inputEl.value||'').trim().slice(0,200); if(!text) return;

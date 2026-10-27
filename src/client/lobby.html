@@ -51,6 +51,10 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
 #net-status.off { color:#ef9a9a; }
 #instr { position:fixed; bottom:12px; left:12px; z-index:50;
   color:rgba(255,255,255,.7); font-size:12px; text-shadow:1px 1px 2px #000; line-height:1.6; }
+/* touch: joystick lives bottom-left, so float hints top-center out of the way */
+html.is-touch #instr { bottom:auto; left:50%; top:56px; transform:translateX(-50%);
+  text-align:center; max-width:92vw; background:rgba(0,0,0,.35); padding:6px 12px;
+  border-radius:14px; font-size:11px; }
 #menu-link { position:fixed; top:12px; right:12px; z-index:50; cursor:pointer;
   color:#fff; background:rgba(0,0,0,.4); padding:6px 14px; border-radius:16px;
   text-decoration:none; font-size:13px; border:1px solid rgba(255,255,255,.2); }
@@ -296,6 +300,7 @@ body { overflow:hidden; background:#87ceeb; font-family:'Arial Rounded MT Bold',
 <script src="js/mobile.js"></script>
 <script src="js/achievements.js"></script>
 <script src="js/hub.js"></script>
+<script src="js/board.js"></script>
 <script src="js/kidmodel.js"></script>
 <script src="js/catalog.js"></script>
 <script>
@@ -1081,6 +1086,11 @@ function updatePortals(){
   else el.style.display='none';
 }
 function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
+// Tell the server we're leaving the moment we navigate away (portal → level,
+// close tab) so the online count drops immediately instead of lingering.
+function leaveNet(){ try{ send({t:'leave'}); ws&&ws.close(); }catch(e){} }
+addEventListener('pagehide', leaveNet);
+addEventListener('beforeunload', leaveNet);
 function setNet(on){
   const el=document.getElementById('net-status');
   el.className=on?'on':'off'; el.textContent=on?'Online':'Offline (solo)';
@@ -1251,6 +1261,13 @@ enterBtn.addEventListener('click',()=>{
     Mobile.button({label:'USE',code:'KeyF'});  // use held gadget
     Mobile.button({label:'▶',code:'KeyE'});    // enter portal when near one
     Mobile.pinch(r=>{ camDist=Math.max(CAM_MIN,Math.min(CAM_MAX, camDist/r)); });  // two-finger zoom
+    Mobile.look((dx,dy)=>{   // right-thumb drag → look around
+      if(editMode){ freeCam.yaw-=dx*.005; freeCam.pitch=Math.max(-1.4,Math.min(1.4,freeCam.pitch-dy*.005)); }
+      else { camTheta-=dx*.005; camPhi=Math.max(.12,Math.min(1.2,camPhi+dy*.005)); }
+    });
+    const instr=document.getElementById('instr');
+    if(instr) instr.innerHTML='Left stick – move &nbsp;|&nbsp; Drag right side – look &nbsp;|&nbsp; '
+      +'Pinch – zoom &nbsp;|&nbsp; JUMP / RUN &nbsp;|&nbsp; 🎒 items &nbsp;|&nbsp; ▶ enter portal';
   }
 });
 

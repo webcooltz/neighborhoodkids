@@ -14,7 +14,7 @@
   // No-op stubs on desktop so level init code can call unconditionally.
   if(!isTouch){
     M.joystick=function(){}; M.button=function(){return null;};
-    M.tapCanvas=function(){}; M.touchDraw=function(){};
+    M.tapCanvas=function(){}; M.touchDraw=function(){}; M.look=function(){};
     M.lanes=function(){return null;}; M.key=function(){};
     M.pinch=function(){};
     return;
@@ -142,6 +142,31 @@
     },{passive:false});
     const end=e=>{ if(e.touches.length<2){ active=false; last=0; } };
     el.addEventListener('touchend',end); el.addEventListener('touchcancel',end);
+  };
+
+  // Right-thumb look. Single-finger drag anywhere that isn't a control (joystick,
+  // buttons, lanes) → cb(dx,dy) in px each move. Yields to two-finger pinch.
+  M.look=function(cb,opts){
+    opts=opts||{};
+    const sens=opts.sensitivity||1;
+    let id=null, lx=0, ly=0;
+    const isCtrl=el=>el&&el.closest&&el.closest('#mc-joy,#mc-btns,.mc-btn,#mc-lanes');
+    document.addEventListener('touchstart',e=>{
+      if(e.touches.length>1){ id=null; return; }   // let pinch own multi-touch
+      if(id!==null) return;
+      const t=e.changedTouches[0];
+      if(isCtrl(t.target)) return;                 // ignore joystick / buttons
+      id=t.identifier; lx=t.clientX; ly=t.clientY;
+    },{passive:true});
+    document.addEventListener('touchmove',e=>{
+      if(id===null || e.touches.length>1) return;
+      for(const t of e.changedTouches) if(t.identifier===id){
+        cb((t.clientX-lx)*sens,(t.clientY-ly)*sens); lx=t.clientX; ly=t.clientY;
+      }
+    },{passive:true});
+    const end=e=>{ for(const t of e.changedTouches) if(t.identifier===id) id=null; };
+    document.addEventListener('touchend',end);
+    document.addEventListener('touchcancel',end);
   };
 
   // Tap on the 3D canvas → fn(clientX,clientY). Ignores drags.
